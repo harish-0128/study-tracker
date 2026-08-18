@@ -994,6 +994,12 @@ export default function App() {
       <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 sm:px-8 py-3 ${curTheme.header}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              className="w-7 h-7 object-contain rounded-md"
+              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+            />
             <span className="font-extrabold tracking-tight text-base sm:text-lg flex items-center gap-1.5">
               {theme === 'birthday' && <Cake className="w-4 h-4 text-pink-400" />}
               {APP_NAME}
@@ -1051,7 +1057,7 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <div className="space-y-4 sm:space-y-6">
             
-            {/* Top Stat Overview Grid (2x2 on Mobile, 4x1 on Laptop) */}
+            {/* Top Stat Overview Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card}`}>
                 <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
@@ -1111,7 +1117,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick Action Tools Bar (Expandable on Mobile) */}
+            {/* Quick Action Tools Bar */}
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setActiveToolDrawer(activeToolDrawer === 'ai' ? 'none' : 'ai')}
@@ -1147,7 +1153,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Expandable Tool Drawer Content */}
+            {/* Expandable Tool Drawers */}
             {activeToolDrawer === 'ai' && (
               <div className={`p-4 rounded-xl border border-purple-500/30 ${curTheme.card} space-y-2.5 animate-in fade-in`}>
                 <div className="flex items-center gap-2">
@@ -1947,7 +1953,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Profile Settings (Weekly Goal & WhatsApp) */}
+            {/* Profile Settings */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Contact</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
