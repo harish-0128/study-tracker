@@ -10,7 +10,8 @@ import {
   CalendarCheck, Palette, Eye, CalendarDays, Ban, ShieldCheck,
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
   TrendingUp, CheckSquare, Music, Play, Pause, RefreshCw, Volume2, Link as LinkIcon,
-  Bot, FileText, Share2, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark
+  Bot, FileText, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -116,7 +117,7 @@ const themeStyles: Record<string, {
   slate: {
     bg: 'bg-[#0b0f19] text-slate-100',
     header: 'bg-slate-900/90 border-slate-800',
-    card: 'bg-slate-900/70 border border-slate-800/80 shadow-md',
+    card: 'bg-slate-900/70 border border-slate-800/80 shadow-sm',
     input: 'bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:border-blue-500',
     btnPrimary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
     accent: 'text-blue-400',
@@ -126,7 +127,7 @@ const themeStyles: Record<string, {
   obsidian: {
     bg: 'bg-[#080808] text-neutral-100',
     header: 'bg-neutral-900/90 border-neutral-800',
-    card: 'bg-neutral-900/60 border border-neutral-800 shadow-md',
+    card: 'bg-neutral-900/60 border border-neutral-800 shadow-sm',
     input: 'bg-neutral-950 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:border-emerald-500',
     btnPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm',
     accent: 'text-emerald-400',
@@ -189,6 +190,9 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Mobile expandable tool panels
+  const [activeToolDrawer, setActiveToolDrawer] = useState<'none' | 'ai' | 'library' | 'spotify'>('none');
+
   // Auth State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -212,7 +216,6 @@ export default function App() {
   const [pomoMode, setPomoMode] = useState<'focus' | 'break'>('focus');
 
   // Spotify Player State
-  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const [spotifyEmbedUrl, setSpotifyEmbedUrl] = useState(SPOTIFY_PRESETS[0].embedUrl);
   const [customSpotifyUrl, setCustomSpotifyUrl] = useState('');
 
@@ -415,7 +418,7 @@ export default function App() {
     setMyPastLogs(data || []);
   };
 
-  // Virtual Library Live Presence Methods
+  // Virtual Library Presence
   const fetchLivePeers = async () => {
     const { data } = await supabase.from('live_study_presence').select('*').order('started_at', { ascending: false });
     setLivePeers(data || []);
@@ -452,22 +455,20 @@ export default function App() {
       const topic = aiTopicInput.trim();
       const plan = {
         learn: [
-          `Master core theoretical foundations of ${topic}`,
-          `Watch lecture walkthrough & map key formulas for ${topic}`,
-          `Study architecture diagrams and parameter flows in ${topic}`
+          `Master core theoretical principles of ${topic}`,
+          `Map formulas & review core derivations for ${topic}`
         ],
         apply: [
-          `Implement a minimal prototype/problem sheet on ${topic}`,
-          `Solve 3 exam-level analytical problems on ${topic}`
+          `Implement a code demo or problem set on ${topic}`,
+          `Solve 2 exam-style analytical problems on ${topic}`
         ],
         review: [
-          `Summarize doubts and edge-cases for ${topic}`,
-          `Conduct Feynman technique explanation of ${topic}`
+          `Summarize doubts and edge-cases for ${topic}`
         ]
       };
       setGeneratedPlan(plan);
       setIsGeneratingAi(false);
-    }, 800);
+    }, 700);
   };
 
   const adoptAiTasks = async () => {
@@ -487,8 +488,9 @@ export default function App() {
       setTasks([...tasks, ...data]);
       setGeneratedPlan(null);
       setAiTopicInput('');
+      setActiveToolDrawer('none');
       confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
-      alert('AI-generated study modules added to today\'s targets!');
+      alert('AI study modules adopted into today\'s roadmap!');
     }
   };
 
@@ -895,11 +897,11 @@ export default function App() {
 
   const leagueRank = useMemo(() => {
     const pts = profile?.points || 0;
-    if (pts >= 1000) return { name: 'Master Division 💎', color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' };
-    if (pts >= 500) return { name: 'Diamond Tier 🔷', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' };
-    if (pts >= 250) return { name: 'Gold League 🏆', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' };
-    if (pts >= 100) return { name: 'Silver Tier 🥈', color: 'text-slate-300 border-slate-400/40 bg-slate-400/10' };
-    return { name: 'Bronze League 🥉', color: 'text-amber-700 border-amber-700/40 bg-amber-700/10' };
+    if (pts >= 1000) return { name: 'Master 💎', color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' };
+    if (pts >= 500) return { name: 'Diamond 🔷', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' };
+    if (pts >= 250) return { name: 'Gold 🏆', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' };
+    if (pts >= 100) return { name: 'Silver 🥈', color: 'text-slate-300 border-slate-400/40 bg-slate-400/10' };
+    return { name: 'Bronze 🥉', color: 'text-amber-700 border-amber-700/40 bg-amber-700/10' };
   }, [profile?.points]);
 
   const curTheme = themeStyles[theme] || themeStyles.slate;
@@ -989,15 +991,15 @@ export default function App() {
   return (
     <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-200 antialiased`}>
       {/* Top Header */}
-      <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 sm:px-8 py-3.5 ${curTheme.header}`}>
+      <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 sm:px-8 py-3 ${curTheme.header}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <span className="font-extrabold tracking-tight text-base sm:text-lg flex items-center gap-1.5">
               {theme === 'birthday' && <Cake className="w-4 h-4 text-pink-400" />}
               {APP_NAME}
             </span>
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${isLight ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
-              <Flame className="w-3.5 h-3.5 fill-current" />
+            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${isLight ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+              <Flame className="w-3 h-3 fill-current" />
               <span>{profile?.points || 0} XP</span>
             </div>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border hidden sm:inline-block ${leagueRank.color}`}>
@@ -1005,22 +1007,11 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => setShowMusicPlayer(!showMusicPlayer)}
-              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
-                showMusicPlayer ? 'bg-emerald-600 border-emerald-500 text-white shadow-md' : 'border-inherit opacity-75 hover:opacity-100'
-              }`}
-              title="Toggle Spotify Relax Lounge"
-            >
-              <Music className="w-4 h-4 text-emerald-400" />
-              <span className="hidden sm:inline">Spotify Lounge</span>
-            </button>
-
+          <div className="flex items-center gap-2">
             <span className="text-xs opacity-60 hidden md:inline-block font-mono">{displayNameDisplay}</span>
             <button 
               onClick={handleSignOut} 
-              className="text-xs p-2 rounded-xl opacity-60 hover:opacity-100 hover:text-red-500 transition"
+              className="text-xs p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:text-red-500 transition"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
@@ -1029,73 +1020,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* Floating Spotify Lounge Drawer */}
-      {showMusicPlayer && (
-        <div className={`max-w-6xl w-full mx-auto px-4 sm:px-8 pt-4 transition-all animate-in fade-in slide-in-from-top-4`}>
-          <div className={`p-4 sm:p-5 rounded-2xl border ${curTheme.card} shadow-2xl space-y-3.5`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  <Volume2 className="w-4 h-4 animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">Study Audio & Ambient Lounge</h3>
-                  <p className="text-[11px] opacity-60">Listen to study beats, ambient rain, or stream your custom Spotify playlist.</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowMusicPlayer(false)}
-                className="text-xs border border-inherit px-2.5 py-1 rounded-lg opacity-70 hover:opacity-100"
-              >
-                Hide Player
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 items-center">
-              {SPOTIFY_PRESETS.map((preset) => (
-                <button
-                  key={preset.name}
-                  onClick={() => setSpotifyEmbedUrl(preset.embedUrl)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                    spotifyEmbedUrl === preset.embedUrl ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : 'border-inherit opacity-75 hover:opacity-100'
-                  }`}
-                >
-                  {preset.name}
-                </button>
-              ))}
-
-              <form onSubmit={applyCustomSpotify} className="flex-1 min-w-[240px] flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Paste Spotify Playlist Link..."
-                  value={customSpotifyUrl}
-                  onChange={(e) => setCustomSpotifyUrl(e.target.value)}
-                  className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
-                />
-                <button type="submit" className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1">
-                  <LinkIcon className="w-3 h-3" /> Load
-                </button>
-              </form>
-            </div>
-
-            <div className="rounded-xl overflow-hidden shadow-inner border border-white/10 bg-black/40">
-              <iframe
-                src={spotifyEmbedUrl}
-                width="100%"
-                height="152"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Broadcast Announcement Bar */}
       {announcements.length > 0 && (
-        <div className={`px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 border-b ${isLight ? 'bg-blue-50 text-blue-800 border-blue-100' : 'bg-blue-950/50 text-blue-200 border-blue-900/50'}`}>
+        <div className={`px-4 py-1.5 text-xs font-medium flex items-center justify-center gap-2 border-b ${isLight ? 'bg-blue-50 text-blue-800 border-blue-100' : 'bg-blue-950/50 text-blue-200 border-blue-900/50'}`}>
           <Megaphone className="w-3.5 h-3.5 shrink-0" />
           <span>{announcements[0].message}</span>
         </div>
@@ -1103,7 +1030,7 @@ export default function App() {
 
       {/* Subtle Birthday Notification Banner */}
       {theme === 'birthday' && (
-        <div className="bg-pink-950/40 border-b border-pink-900/50 text-pink-200 px-4 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-2">
+        <div className="bg-pink-950/40 border-b border-pink-900/50 text-pink-200 px-4 py-1 text-xs font-medium text-center flex items-center justify-center gap-2">
           <PartyPopper className="w-3.5 h-3.5 text-pink-400" />
           Happy Birthday! Wishing you focus and success in your studies this year.
         </div>
@@ -1118,61 +1045,56 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-52 flex-1">
+      <main className="max-w-6xl w-full mx-auto p-3.5 sm:p-8 pb-48 sm:pb-52 flex-1">
         
         {/* TAB 1: TODAY'S FOCUS */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Top Stat Overview Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div className={`p-5 rounded-xl ${curTheme.card}`}>
-                <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" /> Today's Focus
+          <div className="space-y-4 sm:space-y-6">
+            
+            {/* Top Stat Overview Grid (2x2 on Mobile, 4x1 on Laptop) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+              <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card}`}>
+                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Focus
                 </span>
-                <p className="text-3xl font-bold mt-1">{hours} <span className="text-sm font-normal opacity-60">hours</span></p>
+                <p className="text-xl sm:text-3xl font-bold mt-0.5">{hours} <span className="text-xs font-normal opacity-60">hrs</span></p>
               </div>
 
-              <div className={`p-5 rounded-xl ${curTheme.card}`}>
-                <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
-                  <CheckSquare className="w-3.5 h-3.5" /> Tasks Finished
+              <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card}`}>
+                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
+                  <CheckSquare className="w-3 h-3" /> Done
                 </span>
-                <p className="text-3xl font-bold mt-1">{completedCount} <span className="text-sm font-normal opacity-60">/ {tasks.length}</span></p>
+                <p className="text-xl sm:text-3xl font-bold mt-0.5">{completedCount} <span className="text-xs font-normal opacity-60">/ {tasks.length}</span></p>
               </div>
 
-              <div className={`p-5 rounded-xl ${curTheme.card}`}>
-                <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5" /> Weekly Goal ({weeklyGoal}h)
+              <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card}`}>
+                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Goal
                 </span>
-                <div className="flex items-baseline justify-between mt-1">
-                  <p className="text-3xl font-bold">{weeklyPercent}%</p>
-                  <span className="text-xs opacity-60 font-mono">{weeklyLoggedHours.toFixed(1)} / {weeklyGoal} hrs</span>
-                </div>
-                <div className={`w-full rounded-full h-1.5 overflow-hidden mt-3 ${isLight ? 'bg-slate-200' : 'bg-slate-800'}`}>
-                  <div
-                    className={`h-full transition-all duration-300 ${isLight ? 'bg-blue-600' : 'bg-blue-500'}`}
-                    style={{ width: `${weeklyPercent}%` }}
-                  />
+                <p className="text-xl sm:text-3xl font-bold mt-0.5">{weeklyPercent}%</p>
+                <div className={`w-full rounded-full h-1 overflow-hidden mt-1.5 ${isLight ? 'bg-slate-200' : 'bg-slate-800'}`}>
+                  <div className={`h-full ${isLight ? 'bg-blue-600' : 'bg-blue-500'}`} style={{ width: `${weeklyPercent}%` }} />
                 </div>
               </div>
 
-              {/* Pomodoro Quick Sprint Widget */}
-              <div className={`p-5 rounded-xl ${curTheme.card} flex flex-col justify-between border-blue-500/30`}>
+              {/* Pomodoro Focus Timer */}
+              <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card} flex flex-col justify-between border-blue-500/30`}>
                 <div className="flex justify-between items-center">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 text-blue-400" /> Focus Sprint
+                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
+                    <Target className="w-3 h-3 text-blue-400" /> Sprint
                   </span>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${pomoMode === 'focus' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  <span className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${pomoMode === 'focus' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                     {pomoMode}
                   </span>
                 </div>
-                <div className="flex items-center justify-between my-1">
-                  <span className="text-2xl font-black font-mono tracking-tight">{formattedPomoTime}</span>
-                  <div className="flex gap-1.5">
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-base sm:text-2xl font-black font-mono tracking-tight">{formattedPomoTime}</span>
+                  <div className="flex gap-1">
                     <button
                       onClick={() => setIsPomoRunning(!isPomoRunning)}
-                      className={`p-2 rounded-lg text-white font-bold transition shadow-sm ${isPomoRunning ? 'bg-amber-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+                      className={`p-1.5 rounded-lg text-white font-bold transition shadow-sm ${isPomoRunning ? 'bg-amber-600' : 'bg-blue-600 hover:bg-blue-500'}`}
                     >
-                      {isPomoRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {isPomoRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                     </button>
                     <button
                       onClick={() => {
@@ -1180,130 +1102,177 @@ export default function App() {
                         setPomoSeconds(25 * 60);
                         setPomoMode('focus');
                       }}
-                      className="p-2 rounded-lg border border-inherit opacity-60 hover:opacity-100"
+                      className="p-1.5 rounded-lg border border-inherit opacity-60 hover:opacity-100"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
+                      <RefreshCw className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Virtual Study Library: Live Co-Studying Presence */}
-            <div className={`p-4 sm:p-5 rounded-2xl border ${curTheme.card} space-y-3`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Quick Action Tools Bar (Expandable on Mobile) */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setActiveToolDrawer(activeToolDrawer === 'ai' ? 'none' : 'ai')}
+                className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  activeToolDrawer === 'ai' ? 'bg-purple-600 text-white border-purple-500 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
+                }`}
+              >
+                <Bot className="w-3.5 h-3.5 text-purple-400" />
+                <span className="truncate">AI Mentor</span>
+                {activeToolDrawer === 'ai' ? <ChevronUp className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
+              </button>
+
+              <button
+                onClick={() => setActiveToolDrawer(activeToolDrawer === 'library' ? 'none' : 'library')}
+                className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  activeToolDrawer === 'library' ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate">Library ({livePeers.length})</span>
+                {activeToolDrawer === 'library' ? <ChevronUp className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
+              </button>
+
+              <button
+                onClick={() => setActiveToolDrawer(activeToolDrawer === 'spotify' ? 'none' : 'spotify')}
+                className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                  activeToolDrawer === 'spotify' ? 'bg-emerald-700 text-white border-emerald-600 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
+                }`}
+              >
+                <Music className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate">Audio</span>
+                {activeToolDrawer === 'spotify' ? <ChevronUp className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
+              </button>
+            </div>
+
+            {/* Expandable Tool Drawer Content */}
+            {activeToolDrawer === 'ai' && (
+              <div className={`p-4 rounded-xl border border-purple-500/30 ${curTheme.card} space-y-2.5 animate-in fade-in`}>
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-emerald-400 animate-pulse" />
-                  <h3 className="text-xs font-bold font-mono uppercase tracking-wider">
-                    Virtual Library: Studying Live Now ({livePeers.length})
+                  <Bot className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-purple-400">
+                    AI Study Plan Generator
                   </h3>
                 </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Current subject (e.g. Deep Learning)..."
-                    value={studySubjectInput}
-                    onChange={(e) => setStudySubjectInput(e.target.value)}
-                    disabled={isStudyingLive}
-                    className={`rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                    placeholder="Topic (e.g. Convolutional Networks, DP)..."
+                    value={aiTopicInput}
+                    onChange={(e) => setAiTopicInput(e.target.value)}
+                    className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
                   />
                   <button
-                    onClick={toggleLiveStudySession}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                      isStudyingLive ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                    }`}
+                    onClick={generateAiStudyRoadmap}
+                    disabled={isGeneratingAi}
+                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs hover:opacity-90 transition shrink-0"
                   >
-                    <Zap className="w-3.5 h-3.5" /> {isStudyingLive ? 'Leave Room' : 'Go Live & Study'}
+                    {isGeneratingAi ? '...' : 'Decompose'}
                   </button>
                 </div>
-              </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {livePeers.length === 0 ? (
-                  <p className="text-xs italic opacity-40 py-1">No one is in the virtual library yet. Be the first to start!</p>
-                ) : (
-                  livePeers.map((p) => (
-                    <div key={p.user_id} className={`p-2 px-3 rounded-xl border border-inherit shrink-0 flex items-center gap-2.5 text-xs ${isLight ? 'bg-slate-50' : 'bg-slate-950/60'}`}>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      <div>
-                        <p className="font-bold">{p.display_name}</p>
-                        <p className="text-[10px] opacity-60 font-mono">{p.current_subject}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* AI Academic Mentor Roadmap Generator */}
-            <div className={`p-4 sm:p-5 rounded-2xl border border-purple-500/30 ${curTheme.card} space-y-3`}>
-              <div className="flex items-center gap-2">
-                <Bot className="w-4 h-4 text-purple-400" />
-                <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-purple-400">
-                  AI Academic Mentor: Instant Study Plan Generator
-                </h3>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter topic to decompose (e.g. Convolutional Neural Networks, Dynamic Programming)..."
-                  value={aiTopicInput}
-                  onChange={(e) => setAiTopicInput(e.target.value)}
-                  className={`flex-1 rounded-lg px-3.5 py-2 text-xs outline-none ${curTheme.input}`}
-                />
-                <button
-                  onClick={generateAiStudyRoadmap}
-                  disabled={isGeneratingAi}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs hover:opacity-90 transition flex items-center gap-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> {isGeneratingAi ? 'Synthesizing...' : 'Generate 3-Tier Plan'}
-                </button>
-              </div>
-
-              {generatedPlan && (
-                <div className={`p-4 rounded-xl border border-purple-500/30 space-y-3 ${isLight ? 'bg-purple-50/50' : 'bg-purple-950/20'}`}>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div>
-                      <span className="font-bold text-blue-400 flex items-center gap-1 mb-1"><BookOpen className="w-3 h-3" /> LEARN</span>
+                {generatedPlan && (
+                  <div className={`p-3 rounded-lg border border-purple-500/30 space-y-2 text-xs ${isLight ? 'bg-purple-50/50' : 'bg-purple-950/20'}`}>
+                    <div className="space-y-1">
+                      <span className="font-bold text-blue-400 block">LEARN:</span>
                       {generatedPlan.learn.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
-                    </div>
-                    <div>
-                      <span className="font-bold text-emerald-400 flex items-center gap-1 mb-1"><Code2 className="w-3 h-3" /> APPLY</span>
+                      <span className="font-bold text-emerald-400 block pt-1">APPLY:</span>
                       {generatedPlan.apply.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
                     </div>
-                    <div>
-                      <span className="font-bold text-amber-400 flex items-center gap-1 mb-1"><RotateCcw className="w-3 h-3" /> REVIEW</span>
-                      {generatedPlan.review.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
-                    </div>
+                    <button
+                      onClick={adoptAiTasks}
+                      className="w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-xs font-bold"
+                    >
+                      Adopt Targets ✨
+                    </button>
                   </div>
+                )}
+              </div>
+            )}
+
+            {activeToolDrawer === 'library' && (
+              <div className={`p-4 rounded-xl border ${curTheme.card} space-y-3 animate-in fade-in`}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-emerald-400" /> Virtual Library
+                  </h3>
                   <button
-                    onClick={adoptAiTasks}
-                    className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-md transition"
+                    onClick={toggleLiveStudySession}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      isStudyingLive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
+                    }`}
                   >
-                    Adopt This Plan into Today's Roadmap ✨
+                    {isStudyingLive ? 'Leave' : 'Go Live'}
                   </button>
                 </div>
-              )}
-            </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {livePeers.length === 0 ? (
+                    <p className="text-xs italic opacity-40">No peers studying right now.</p>
+                  ) : (
+                    livePeers.map((p) => (
+                      <div key={p.user_id} className={`p-2 rounded-lg border border-inherit shrink-0 flex items-center gap-2 text-xs ${isLight ? 'bg-slate-50' : 'bg-slate-950/60'}`}>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <div>
+                          <p className="font-bold text-[11px]">{p.display_name}</p>
+                          <p className="text-[9px] opacity-60 font-mono">{p.current_subject}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeToolDrawer === 'spotify' && (
+              <div className={`p-4 rounded-xl border ${curTheme.card} space-y-2.5 animate-in fade-in`}>
+                <div className="flex flex-wrap gap-1.5">
+                  {SPOTIFY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      onClick={() => setSpotifyEmbedUrl(preset.embedUrl)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                        spotifyEmbedUrl === preset.embedUrl ? 'bg-emerald-600 text-white border-emerald-500' : 'border-inherit opacity-75'
+                      }`}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40">
+                  <iframe
+                    src={spotifyEmbedUrl}
+                    width="100%"
+                    height="80"
+                    frameBorder="0"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Main Laptop 2-Column Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               
               {/* Left 2 Columns: Action Roadmap & Daily Reflection */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+                
                 {/* Task Add Form */}
-                <form onSubmit={addTask} className={`p-5 rounded-xl ${curTheme.card} space-y-3`}>
+                <form onSubmit={addTask} className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="What are you studying next? (e.g. Backprop Math / Assignment 3)"
+                      placeholder="Add target study task..."
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
-                      className={`flex-1 rounded-lg px-3.5 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                      className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                     />
                     <button 
                       type="submit" 
-                      className={`px-5 py-2.5 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
                     >
                       <Plus className="w-4 h-4" /> Add
                     </button>
@@ -1327,32 +1296,32 @@ export default function App() {
                 </form>
 
                 {/* Task List */}
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
                     Today's Roadmap ({tasks.length})
                   </h2>
                   {tasks.length === 0 ? (
-                    <div className={`text-xs italic p-6 rounded-xl text-center opacity-60 ${curTheme.card}`}>
+                    <div className={`text-xs italic p-5 rounded-xl text-center opacity-60 ${curTheme.card}`}>
                       No objectives configured for today. Add your target tasks above!
                     </div>
                   ) : (
                     tasks.map((task) => (
                       <div 
                         key={task.id} 
-                        className={`flex items-center justify-between p-3.5 rounded-xl border transition ${                           task.is_completed ? 'opacity-40' : ''                         } ${curTheme.card}`}
+                        className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition ${                           task.is_completed ? 'opacity-40' : ''                         } ${curTheme.card}`}
                       >
-                        <div onClick={() => toggleTask(task)} className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                        <div onClick={() => toggleTask(task)} className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
                           {task.is_completed ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                           ) : (
-                            <Circle className="w-5 h-5 opacity-40 hover:opacity-100 shrink-0" />
+                            <Circle className="w-4 h-4 opacity-40 hover:opacity-100 shrink-0" />
                           )}
                           <span className={`text-sm truncate font-medium ${task.is_completed ? 'line-through' : ''}`}>
                             {task.title}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded border border-inherit opacity-60">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border border-inherit opacity-60">
                             {task.tier}
                           </span>
                           <button onClick={() => deleteTask(task.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
@@ -1365,11 +1334,11 @@ export default function App() {
                 </div>
 
                 {/* Evening Log & Reflection Form */}
-                <section className={`p-5 rounded-xl ${curTheme.card} space-y-4`}>
+                <section className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-3`}>
                   <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
                     <Award className="w-4 h-4" /> Evening Reflection & Hours
                   </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="flex items-center gap-1 text-xs mb-1 font-medium opacity-80">
                         <Clock className="w-3.5 h-3.5" /> Total Hours Studied
@@ -1379,7 +1348,7 @@ export default function App() {
                         step="0.25"
                         value={hours}
                         onChange={(e) => setHours(e.target.value)}
-                        className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
+                        className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                       />
                     </div>
                     <div>
@@ -1391,13 +1360,13 @@ export default function App() {
                         value={blockers}
                         onChange={(e) => setBlockers(e.target.value)}
                         placeholder="Any doubts today?"
-                        className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
+                        className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                       />
                     </div>
                   </div>
                   <button 
                     onClick={saveDailyLog} 
-                    className={`w-full py-3 font-bold rounded-xl text-sm transition shadow-md ${curTheme.btnPrimary}`}
+                    className={`w-full py-2.5 font-bold rounded-xl text-sm transition shadow-md ${curTheme.btnPrimary}`}
                   >
                     Save Reflection & Claim XP 🔥
                   </button>
@@ -1407,13 +1376,13 @@ export default function App() {
               {/* Right 1 Column: Tier Ratio Breakdown & Past Study Logs */}
               <div className="space-y-4">
                 {/* 3-Tier Distribution Breakdown */}
-                <div className={`p-5 rounded-xl ${curTheme.card} space-y-3`}>
+                <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                    <TrendingUp className="w-4 h-4" /> Study Ratio Distribution
+                    <TrendingUp className="w-3.5 h-3.5" /> Study Ratio Distribution
                   </h3>
                   <div className="space-y-2 text-xs">
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
+                      <div className="flex justify-between font-semibold mb-0.5">
                         <span className="text-blue-400">Learn (Theory)</span>
                         <span>{tierRatio.learn}%</span>
                       </div>
@@ -1422,7 +1391,7 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
+                      <div className="flex justify-between font-semibold mb-0.5">
                         <span className="text-emerald-400">Apply (Practice/Code)</span>
                         <span>{tierRatio.apply}%</span>
                       </div>
@@ -1431,7 +1400,7 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
+                      <div className="flex justify-between font-semibold mb-0.5">
                         <span className="text-amber-400">Review (Doubts/Feynman)</span>
                         <span>{tierRatio.review}%</span>
                       </div>
@@ -1442,17 +1411,17 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className={`p-5 rounded-xl ${curTheme.card} space-y-4`}>
+                <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-3`}>
                   <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                    <History className="w-4 h-4" /> My Recent Study Logs
+                    <History className="w-3.5 h-3.5" /> My Recent Study Logs
                   </h3>
                   
                   {myPastLogs.length === 0 ? (
-                    <p className="text-xs italic opacity-40 py-4 text-center">No previous logs recorded yet.</p>
+                    <p className="text-xs italic opacity-40 py-3 text-center">No previous logs recorded yet.</p>
                   ) : (
-                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                    <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
                       {myPastLogs.map((past, i) => (
-                        <div key={i} className={`p-3 rounded-lg border border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                        <div key={i} className={`p-2.5 rounded-lg border border-inherit text-xs space-y-1 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                           <div className="flex justify-between font-mono font-semibold">
                             <span>{past.date}</span>
                             <span className={curTheme.accent}>{past.hours_studied} hrs</span>
@@ -1460,7 +1429,7 @@ export default function App() {
                           {past.blockers && (
                             <p className="text-[11px] opacity-75 italic">Blocker: {past.blockers}</p>
                           )}
-                          <div className="space-y-0.5 pt-1">
+                          <div className="space-y-0.5 pt-0.5">
                             {past.tasks && past.tasks.length > 0 ? (
                               past.tasks.map((t) => (
                                 <div key={t.id} className="flex items-center gap-1 text-[11px] opacity-75">
@@ -1484,30 +1453,30 @@ export default function App() {
 
         {/* TAB 2: CALENDAR & PLANNER */}
         {activeTab === 'calendar' && (
-          <div className="space-y-6 max-w-4xl mx-auto">
-            <div className={`p-5 rounded-xl ${curTheme.card} space-y-3`}>
+          <div className="space-y-5 max-w-4xl mx-auto">
+            <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-3`}>
               <h2 className="text-sm font-semibold flex items-center gap-1.5">
                 <CalendarIcon className="w-4 h-4 opacity-70" /> Schedule Study Milestones & Exam Deadlines
               </h2>
-              <form onSubmit={addEvent} className="space-y-3">
+              <form onSubmit={addEvent} className="space-y-2.5">
                 <input
                   type="text"
                   placeholder="Event goal (e.g. Deep Learning Module 4 Exam Prep)"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
-                  className={`w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
                     type="datetime-local"
                     value={newEventDate}
                     onChange={(e) => setNewEventDate(e.target.value)}
-                    className={`w-full rounded-lg px-3.5 py-2 text-sm outline-none transition ${curTheme.input}`}
+                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                   />
                   <select
                     value={newEventTag}
                     onChange={(e) => setNewEventTag(e.target.value)}
-                    className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                   >
                     <option>General</option>
                     <option>Exam</option>
@@ -1517,31 +1486,31 @@ export default function App() {
                 </div>
                 <button
                   type="submit"
-                  className={`w-full py-2.5 rounded-lg text-sm font-medium transition ${curTheme.btnPrimary}`}
+                  className={`w-full py-2 rounded-lg text-sm font-medium transition ${curTheme.btnPrimary}`}
                 >
                   Add to Study Calendar
                 </button>
               </form>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
                 Upcoming Milestones ({events.length})
               </h3>
               {events.length === 0 ? (
-                <p className={`text-xs italic p-6 rounded-xl text-center opacity-60 ${curTheme.card}`}>
+                <p className={`text-xs italic p-5 rounded-xl text-center opacity-60 ${curTheme.card}`}>
                   No calendar milestones scheduled.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {events.map((ev) => (
-                    <div key={ev.id} className={`p-4 rounded-xl flex items-center justify-between ${curTheme.card}`}>
+                    <div key={ev.id} className={`p-3.5 rounded-xl flex items-center justify-between ${curTheme.card}`}>
                       <div>
                         <h4 className="text-sm font-semibold">{ev.title}</h4>
                         <p className="text-xs opacity-60 font-mono mt-0.5">{new Date(ev.start_time).toLocaleString()}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2.5 py-0.5 rounded border font-medium ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}>
                           {ev.tag}
                         </span>
                         <button onClick={() => deleteEvent(ev.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
@@ -1558,11 +1527,11 @@ export default function App() {
 
         {/* TAB 3: DISCUSSION GROUPS & NOTES VAULT */}
         {activeTab === 'discussions' && (
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="max-w-5xl mx-auto space-y-5">
             {!activeGroup ? (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {profile?.role === 'admin' && (
-                  <form onSubmit={createGroup} className={`p-5 rounded-xl ${curTheme.card} space-y-3`}>
+                  <form onSubmit={createGroup} className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                     <h3 className="text-xs font-mono uppercase font-semibold opacity-75">
                       Admin: Create New Community Hub
                     </h3>
@@ -1571,14 +1540,14 @@ export default function App() {
                       placeholder="Group Title (e.g. Deep Learning Discussion Room)"
                       value={newGroupName}
                       onChange={(e) => setNewGroupName(e.target.value)}
-                      className={`w-full rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                      className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
                     />
                     <input
                       type="text"
                       placeholder="Hub Description"
                       value={newGroupDesc}
                       onChange={(e) => setNewGroupDesc(e.target.value)}
-                      className={`w-full rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                      className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
                     />
                     <button type="submit" className={`px-4 py-2 rounded-lg text-sm font-medium ${curTheme.btnPrimary}`}>
                       Launch Community
@@ -1587,14 +1556,14 @@ export default function App() {
                 )}
 
                 <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">Active Study Communities</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {groups.map((grp) => {
                     const membership = myMemberships[grp.id];
                     const isApproved = isGlobalAdmin || membership?.status === 'approved';
                     const isMod = isGlobalAdmin || membership?.role === 'moderator';
 
                     return (
-                      <div key={grp.id} className={`p-5 rounded-xl flex flex-col justify-between space-y-4 ${curTheme.card}`}>
+                      <div key={grp.id} className={`p-4 rounded-xl flex flex-col justify-between space-y-3 ${curTheme.card}`}>
                         <div>
                           <div className="flex items-center justify-between mb-1">
                             <h4 className="text-base font-bold">{grp.title}</h4>
@@ -1606,11 +1575,11 @@ export default function App() {
                           </div>
                           <p className="text-xs opacity-60">{grp.description || 'Community Q&A and notes repository.'}</p>
                         </div>
-                        <div className="pt-3 border-t border-inherit flex items-center justify-between">
+                        <div className="pt-2.5 border-t border-inherit flex items-center justify-between">
                           {isApproved ? (
                             <button
                               onClick={() => loadGroupMessagesAndMembers(grp)}
-                              className={`w-full py-2 rounded-lg text-xs font-medium transition text-center ${curTheme.btnPrimary}`}
+                              className={`w-full py-1.5 rounded-lg text-xs font-medium transition text-center ${curTheme.btnPrimary}`}
                             >
                               Enter Discussion & Vault
                             </button>
@@ -1619,7 +1588,7 @@ export default function App() {
                           ) : (
                             <button
                               onClick={() => requestToJoinGroup(grp.id)}
-                              className={`w-full py-2 border rounded-lg text-xs font-medium transition ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}
+                              className={`w-full py-1.5 border rounded-lg text-xs font-medium transition ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}
                             >
                               Request to Join
                             </button>
@@ -1631,64 +1600,55 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className={`rounded-xl flex flex-col h-[650px] border ${curTheme.card} overflow-hidden`}>
-                <div className="p-4 border-b border-inherit flex justify-between items-center">
+              <div className={`rounded-xl flex flex-col h-[600px] border ${curTheme.card} overflow-hidden`}>
+                <div className="p-3.5 border-b border-inherit flex justify-between items-center">
                   <div>
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-sm flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-sm flex items-center gap-1.5">
                         {activeGroup.title}
-                        {isGroupModerator && <span className="text-[10px] opacity-60 font-mono">(Moderator Mode)</span>}
+                        {isGroupModerator && <span className="text-[10px] opacity-60 font-mono">(Mod)</span>}
                       </h3>
-                      {/* Sub-tab switcher */}
                       <div className="flex rounded-lg border border-inherit p-0.5 text-xs">
                         <button
                           onClick={() => setGroupActiveSubTab('chat')}
-                          className={`px-3 py-1 rounded-md font-semibold transition ${groupActiveSubTab === 'chat' ? curTheme.btnPrimary : 'opacity-60'}`}
+                          className={`px-2 py-0.5 rounded-md font-semibold transition ${groupActiveSubTab === 'chat' ? curTheme.btnPrimary : 'opacity-60'}`}
                         >
-                          Discussions
+                          Chat
                         </button>
                         <button
                           onClick={() => setGroupActiveSubTab('vault')}
-                          className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 ${groupActiveSubTab === 'vault' ? curTheme.btnPrimary : 'opacity-60'}`}
+                          className={`px-2 py-0.5 rounded-md font-semibold transition flex items-center gap-1 ${groupActiveSubTab === 'vault' ? curTheme.btnPrimary : 'opacity-60'}`}
                         >
-                          <Bookmark className="w-3 h-3" /> Notes Vault ({groupResources.length})
+                          Vault ({groupResources.length})
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs opacity-60 mt-1">{activeGroup.description}</p>
+                    <p className="text-xs opacity-60 mt-0.5">{activeGroup.description}</p>
                   </div>
-                  <button onClick={() => setActiveGroup(null)} className="text-xs border border-inherit px-3 py-1.5 rounded-lg opacity-75 hover:opacity-100">
-                    Back to Hubs
+                  <button onClick={() => setActiveGroup(null)} className="text-xs border border-inherit px-2.5 py-1 rounded-lg opacity-75 hover:opacity-100">
+                    Back
                   </button>
                 </div>
 
                 {isGroupModerator && (
-                  <div className={`p-3 border-b border-inherit text-xs space-y-2 ${isLight ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
+                  <div className={`p-2.5 border-b border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
                     <span className="font-semibold text-xs opacity-75 block">Member Access & Requests:</span>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
+                    <div className="flex gap-2 overflow-x-auto pb-0.5">
                       {groupMembersList.map((m) => (
-                        <div key={m.id} className={`p-2 rounded-lg border border-inherit text-xs shrink-0 flex items-center gap-2 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
+                        <div key={m.id} className={`p-1.5 px-2 rounded-lg border border-inherit text-xs shrink-0 flex items-center gap-2 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
                           <div>
                             <span className="font-semibold">{m.profiles?.display_name || m.profiles?.email?.split('@')[0]}</span>
                             <span className="opacity-50 text-[10px] ml-1">({m.status})</span>
                           </div>
                           {m.status === 'pending' && (
                             <div className="flex gap-1">
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'approved')} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
+                              <button onClick={() => updateGroupMemberStatus(m.id, 'approved')} className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded">
                                 <Check className="w-3.5 h-3.5" />
                               </button>
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'rejected')} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                              <button onClick={() => updateGroupMemberStatus(m.id, 'rejected')} className="p-0.5 text-red-500 hover:bg-red-50 rounded">
                                 <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          )}
-                          {isGlobalAdmin && m.status === 'approved' && (
-                            <button 
-                              onClick={() => toggleGroupModerator(m.id, m.role)}
-                              className={`text-[10px] px-1.5 py-0.5 rounded border border-inherit ${m.role === 'moderator' ? 'bg-blue-600 text-white' : ''}`}
-                            >
-                              {m.role === 'moderator' ? 'Mod' : 'Make Mod'}
-                            </button>
                           )}
                         </div>
                       ))}
@@ -1699,15 +1659,15 @@ export default function App() {
                 {/* SubTab 1: Chat Stream */}
                 {groupActiveSubTab === 'chat' && (
                   <>
-                    <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                    <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5">
                       {groupMessages.length === 0 ? (
-                        <p className="text-center text-xs italic my-auto opacity-40">No messages yet. Ask a question or post notes!</p>
+                        <p className="text-center text-xs italic my-auto opacity-40">No messages yet in this group.</p>
                       ) : (
                         groupMessages.map((msg) => (
-                          <div key={msg.id} className={`p-3 rounded-xl max-w-[80%] text-xs ${msg.sender_name === displayNameDisplay ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
-                            <div className="flex justify-between items-center gap-4 mb-1">
+                          <div key={msg.id} className={`p-2.5 rounded-xl max-w-[85%] text-xs ${msg.sender_name === displayNameDisplay ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
+                            <div className="flex justify-between items-center gap-3 mb-0.5">
                               <span className="font-bold opacity-90">{msg.sender_name}</span>
-                              <span className="text-[10px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span className="text-[9px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                             <p className="text-sm">{msg.message}</p>
                           </div>
@@ -1715,16 +1675,16 @@ export default function App() {
                       )}
                     </div>
 
-                    <form onSubmit={postGroupMessage} className="p-3 border-t border-inherit flex gap-2">
+                    <form onSubmit={postGroupMessage} className="p-2.5 border-t border-inherit flex gap-2">
                       <input
                         type="text"
-                        placeholder={isApprovedMember ? "Type a question or answer..." : "Join group to participate"}
+                        placeholder={isApprovedMember ? "Type message..." : "Join group to participate"}
                         disabled={!isApprovedMember}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        className={`flex-1 rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                        className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                       />
-                      <button type="submit" disabled={!isApprovedMember} className={`px-4 py-2 rounded-lg ${curTheme.btnPrimary}`}>
+                      <button type="submit" disabled={!isApprovedMember} className={`px-3.5 py-1.5 rounded-lg ${curTheme.btnPrimary}`}>
                         <Send className="w-4 h-4" />
                       </button>
                     </form>
@@ -1733,27 +1693,27 @@ export default function App() {
 
                 {/* SubTab 2: Resource & Notes Vault */}
                 {groupActiveSubTab === 'vault' && (
-                  <div className="flex-1 p-4 flex flex-col justify-between overflow-hidden">
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  <div className="flex-1 p-3.5 flex flex-col justify-between overflow-hidden">
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                       {groupResources.length === 0 ? (
                         <p className="text-center text-xs italic my-auto opacity-40">No notes or cheat-sheets uploaded yet.</p>
                       ) : (
                         groupResources.map((res) => (
-                          <div key={res.id} className={`p-3.5 rounded-xl border border-inherit flex items-center justify-between gap-3 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                          <div key={res.id} className={`p-3 rounded-xl border border-inherit flex items-center justify-between gap-2.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 shrink-0">
                                 <FileText className="w-4 h-4" />
                               </div>
-                              <div>
-                                <h4 className="text-sm font-bold">{res.title}</h4>
-                                <p className="text-[11px] opacity-60">Uploaded by {res.sender_name} • {res.category}</p>
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-bold truncate">{res.title}</h4>
+                                <p className="text-[10px] opacity-60 truncate">By {res.sender_name} • {res.category}</p>
                               </div>
                             </div>
                             <a
                               href={res.resource_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="px-3 py-1.5 rounded-lg border border-inherit text-xs font-semibold hover:bg-blue-600 hover:text-white transition flex items-center gap-1.5"
+                              className="px-2.5 py-1 rounded-lg border border-inherit text-xs font-semibold hover:bg-blue-600 hover:text-white transition flex items-center gap-1 shrink-0"
                             >
                               Open <ExternalLink className="w-3 h-3" />
                             </a>
@@ -1763,11 +1723,11 @@ export default function App() {
                     </div>
 
                     {isApprovedMember && (
-                      <form onSubmit={uploadGroupResource} className="p-3 border-t border-inherit space-y-2 mt-2">
+                      <form onSubmit={uploadGroupResource} className="p-2.5 border-t border-inherit space-y-2 mt-2">
                         <div className="flex gap-2">
                           <input
                             type="text"
-                            placeholder="Resource Title (e.g. Backprop Cheat Sheet PDF)"
+                            placeholder="Resource Title..."
                             value={newResourceTitle}
                             onChange={(e) => setNewResourceTitle(e.target.value)}
                             className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
@@ -1776,25 +1736,24 @@ export default function App() {
                           <select
                             value={newResourceCat}
                             onChange={(e) => setNewResourceCat(e.target.value)}
-                            className={`rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                            className={`rounded-lg px-2 py-1.5 text-xs outline-none ${curTheme.input}`}
                           >
                             <option>Notes</option>
                             <option>Formula Sheet</option>
-                            <option>Assignment Solution</option>
-                            <option>Video/Slides</option>
+                            <option>Solution</option>
                           </select>
                         </div>
                         <div className="flex gap-2">
                           <input
                             type="url"
-                            placeholder="Resource URL (Google Drive / GitHub / PDF link)..."
+                            placeholder="Resource URL (Drive/PDF)..."
                             value={newResourceUrl}
                             onChange={(e) => setNewResourceUrl(e.target.value)}
                             className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
                             required
                           />
-                          <button type="submit" className={`px-4 py-1.5 rounded-lg text-xs font-bold ${curTheme.btnPrimary}`}>
-                            Upload to Vault
+                          <button type="submit" className={`px-3 py-1.5 rounded-lg text-xs font-bold ${curTheme.btnPrimary}`}>
+                            Upload
                           </button>
                         </div>
                       </form>
@@ -1808,33 +1767,33 @@ export default function App() {
 
         {/* TAB 4: LEADERBOARD */}
         {activeTab === 'leaderboard' && (
-          <div className="max-w-3xl mx-auto space-y-5">
-            <div className={`p-6 rounded-xl text-center ${curTheme.card}`}>
-              <Trophy className="w-10 h-10 text-amber-500 mx-auto mb-2" />
-              <h2 className="text-lg font-bold">Monthly Rankings & Tiered Leagues</h2>
+          <div className="max-w-3xl mx-auto space-y-4">
+            <div className={`p-5 rounded-xl text-center ${curTheme.card}`}>
+              <Trophy className="w-8 h-8 text-amber-500 mx-auto mb-1.5" />
+              <h2 className="text-base font-bold">Monthly Rankings & Tiered Leagues</h2>
               <p className="text-xs opacity-60">Consistency scores computed by completed study tasks and logged focus hours.</p>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {leaderboard.map((student, idx) => {
                 const pts = student.points || 0;
                 const tierTag = pts >= 1000 ? 'Master' : pts >= 500 ? 'Diamond' : pts >= 250 ? 'Gold' : pts >= 100 ? 'Silver' : 'Bronze';
                 return (
                   <div
                     key={student.id}
-                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                    className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border ${
                       student.id === user.id ? (isLight ? 'bg-blue-50 border-blue-300 font-medium' : 'bg-slate-800/80 border-slate-700 font-medium') : curTheme.card
                     }`}
                   >
-                    <div className="flex items-center gap-3.5">
-                      <span className="font-mono text-sm w-6 font-bold opacity-60">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm w-5 font-bold opacity-60">
                         #{idx + 1}
                       </span>
                       <div>
                         <h4 className="text-sm font-semibold">
                           {student.display_name || student.email.split('@')[0]} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
                         </h4>
-                        <p className="text-xs opacity-60 capitalize">{student.role} • <span className="font-semibold text-amber-400">{tierTag} Division</span></p>
+                        <p className="text-[11px] opacity-60 capitalize">{student.role} • <span className="font-semibold text-amber-400">{tierTag}</span></p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 font-bold text-sm opacity-90">
@@ -1850,74 +1809,68 @@ export default function App() {
 
         {/* TAB 5: PROFILE & PAST STUDY HISTORY */}
         {activeTab === 'profile' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className={`p-6 rounded-xl ${curTheme.card} flex flex-col sm:flex-row items-center justify-between gap-4`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold border ${isLight ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-800 text-slate-100 border-slate-700'}`}>
+          <div className="max-w-4xl mx-auto space-y-5">
+            <div className={`p-5 rounded-xl ${curTheme.card} flex flex-col sm:flex-row items-center justify-between gap-3`}>
+              <div className="flex items-center gap-3.5">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border ${isLight ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-800 text-slate-100 border-slate-700'}`}>
                   {avatarLetter}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold">{displayNameDisplay}</h2>
+                  <h2 className="text-base font-bold">{displayNameDisplay}</h2>
                   <p className="text-xs opacity-60">{profile?.email}</p>
                 </div>
               </div>
-              <div className="flex gap-4 text-center">
-                <div className="px-4 py-2 rounded-lg border border-inherit">
-                  <span className="text-[10px] font-mono opacity-60 block">ACCUMULATED XP</span>
-                  <span className="text-lg font-bold text-amber-500">{profile?.points || 0}</span>
+              <div className="flex gap-3 text-center">
+                <div className="px-3 py-1.5 rounded-lg border border-inherit">
+                  <span className="text-[9px] font-mono opacity-60 block">XP</span>
+                  <span className="text-base font-bold text-amber-500">{profile?.points || 0}</span>
                 </div>
-                <div className="px-4 py-2 rounded-lg border border-inherit">
-                  <span className="text-[10px] font-mono opacity-60 block">TOTAL FOCUS</span>
-                  <span className="text-lg font-bold">{studentTotalHours.toFixed(1)} hrs</span>
+                <div className="px-3 py-1.5 rounded-lg border border-inherit">
+                  <span className="text-[9px] font-mono opacity-60 block">FOCUS</span>
+                  <span className="text-base font-bold">{studentTotalHours.toFixed(1)} hrs</span>
                 </div>
               </div>
             </div>
 
             {/* Achievement Badges Vault */}
-            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
+            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                <Medal className="w-4 h-4 text-amber-400" /> Unlockable Milestone Badges
+                <Medal className="w-3.5 h-3.5 text-amber-400" /> Milestone Badges
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 1 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">🚀</span>
-                  <p className="font-bold">First Step</p>
-                  <p className="text-[9px] opacity-60">Log 1st Hour</p>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${studentTotalHours >= 1 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">🚀</span>
+                  <p className="font-bold text-[11px]">First Step</p>
                 </div>
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 10 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">⚡</span>
-                  <p className="font-bold">Momentum</p>
-                  <p className="text-[9px] opacity-60">10+ Hours Logged</p>
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${studentTotalHours >= 10 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">⚡</span>
+                  <p className="font-bold text-[11px]">10h Club</p>
                 </div>
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 50 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">🔥</span>
-                  <p className="font-bold">Half Century</p>
-                  <p className="text-[9px] opacity-60">50 Hours Mastered</p>
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${studentTotalHours >= 50 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">🔥</span>
+                  <p className="font-bold text-[11px]">50h Pro</p>
                 </div>
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 100 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">👑</span>
-                  <p className="font-bold">Century Club</p>
-                  <p className="text-[9px] opacity-60">100 Hours Club</p>
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${studentTotalHours >= 100 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">👑</span>
+                  <p className="font-bold text-[11px]">Century</p>
                 </div>
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${(profile?.points || 0) >= 200 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">🎯</span>
-                  <p className="font-bold">Task Grinder</p>
-                  <p className="text-[9px] opacity-60">200+ Points</p>
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${(profile?.points || 0) >= 200 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">🎯</span>
+                  <p className="font-bold text-[11px]">Grinder</p>
                 </div>
-                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${(profile?.points || 0) >= 500 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
-                  <span className="text-xl">💎</span>
-                  <p className="font-bold">Scholar King</p>
-                  <p className="text-[9px] opacity-60">Diamond Division</p>
+                <div className={`p-2.5 rounded-xl border space-y-0.5 ${(profile?.points || 0) >= 500 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-base">💎</span>
+                  <p className="font-bold text-[11px]">Diamond</p>
                 </div>
               </div>
             </div>
 
-            {/* GitHub-Style 60-Day Activity Heatmap Grid */}
-            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
+            {/* GitHub-Style Consistency Heatmap */}
+            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2`}>
               <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                <FlameKindling className="w-4 h-4 text-emerald-400" /> Study Consistency Heatmap (Past 60 Days)
+                <FlameKindling className="w-3.5 h-3.5 text-emerald-400" /> Activity Heatmap (Past 60 Days)
               </h3>
-              <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-black/20 border border-inherit">
+              <div className="flex flex-wrap gap-1 p-2 rounded-xl bg-black/20 border border-inherit">
                 {Array.from({ length: 60 }).map((_, idx) => {
                   const targetDate = new Date();
                   targetDate.setDate(targetDate.getDate() - (59 - idx));
@@ -1930,7 +1883,7 @@ export default function App() {
                     <div
                       key={idx}
                       title={`${dateStr}:${hrs} hrs studied`}
-                      className={`w-3.5 h-3.5 rounded-sm transition-all hover:scale-125 cursor-pointer ${intensity}`}
+                      className={`w-3 h-3 rounded-xs transition-all hover:scale-125 cursor-pointer ${intensity}`}
                     />
                   );
                 })}
@@ -1938,88 +1891,88 @@ export default function App() {
             </div>
 
             {/* 2 Light + 2 Dark Theme Switcher */}
-            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
+            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5" /> Appearance Preferences
               </label>
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => changeTheme('slate')}
-                  className={`p-3 rounded-lg border text-left transition ${theme === 'slate' ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-inherit opacity-70 hover:opacity-100'}`}
+                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'slate' ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-inherit opacity-70'}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-600" />
                     <span className="text-xs">Deep Slate</span>
                   </div>
-                  <p className="text-[10px] opacity-50">Dark 1 (Graphite)</p>
+                  <p className="text-[9px] opacity-50">Dark 1</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => changeTheme('obsidian')}
-                  className={`p-3 rounded-lg border text-left transition ${theme === 'obsidian' ? 'border-emerald-500 bg-emerald-500/10 font-bold' : 'border-inherit opacity-70 hover:opacity-100'}`}
+                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'obsidian' ? 'border-emerald-500 bg-emerald-500/10 font-bold' : 'border-inherit opacity-70'}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-neutral-950 border border-neutral-700" />
                     <span className="text-xs">Obsidian</span>
                   </div>
-                  <p className="text-[10px] opacity-50">Dark 2 (OLED)</p>
+                  <p className="text-[9px] opacity-50">Dark 2</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => changeTheme('porcelain')}
-                  className={`p-3 rounded-lg border text-left transition ${theme === 'porcelain' ? 'border-blue-600 bg-blue-50 font-bold text-slate-900' : 'border-inherit opacity-70 hover:opacity-100'}`}
+                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'porcelain' ? 'border-blue-600 bg-blue-50 font-bold text-slate-900' : 'border-inherit opacity-70'}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-100 border border-slate-300" />
                     <span className="text-xs">Porcelain</span>
                   </div>
-                  <p className="text-[10px] opacity-50">Light 1 (Minimal)</p>
+                  <p className="text-[9px] opacity-50">Light 1</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => changeTheme('nordic')}
-                  className={`p-3 rounded-lg border text-left transition ${theme === 'nordic' ? 'border-amber-700 bg-amber-50 font-bold text-stone-900' : 'border-inherit opacity-70 hover:opacity-100'}`}
+                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'nordic' ? 'border-amber-700 bg-amber-50 font-bold text-stone-900' : 'border-inherit opacity-70'}`}
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
+                  <div className="flex items-center gap-1 mb-0.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#f4f0eb] border border-stone-300" />
                     <span className="text-xs">Nordic Sand</span>
                   </div>
-                  <p className="text-[10px] opacity-50">Light 2 (Warm)</p>
+                  <p className="text-[9px] opacity-50">Light 2</p>
                 </button>
               </div>
             </div>
 
             {/* Profile Settings (Weekly Goal & WhatsApp) */}
-            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
-              <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Reminder Contact</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
+              <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Contact</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] opacity-75 block mb-1">Weekly Target Goal (Hours)</label>
+                  <label className="text-[10px] opacity-75 block mb-0.5">Weekly Goal (Hours)</label>
                   <input
                     type="number"
                     value={weeklyGoal}
                     onChange={(e) => setWeeklyGoal(Number(e.target.value))}
-                    className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] opacity-75 block mb-1">WhatsApp Number (+91...)</label>
+                  <label className="text-[10px] opacity-75 block mb-0.5">WhatsApp (+91...)</label>
                   <input
                     type="text"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+91..."
-                    className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                   />
                 </div>
               </div>
               <button onClick={savePhoneAndGoal} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                Save Target Goals & WhatsApp Profile
+                Save Profile Parameters
               </button>
             </div>
           </div>
@@ -2027,21 +1980,21 @@ export default function App() {
 
         {/* TAB 6: ADMIN CONTROL & INSPECTOR */}
         {activeTab === 'admin' && profile?.role === 'admin' && (
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="max-w-5xl mx-auto space-y-5">
             <div className={`p-4 rounded-xl flex items-center justify-between border ${isLight ? 'bg-red-50 border-red-200 text-red-900' : 'bg-red-950/30 border-red-900/50 text-red-200'}`}>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
                 <div>
                   <h3 className="text-sm font-bold">Admin Control Center</h3>
-                  <p className="text-xs opacity-75">Manage student permissions, assign group moderators, and broadcast platform alerts.</p>
+                  <p className="text-xs opacity-75">Manage student permissions, assign moderators, and broadcast alerts.</p>
                 </div>
               </div>
             </div>
 
             {/* Broadcast Form */}
-            <form onSubmit={createBroadcastAnnouncement} className={`p-4 rounded-xl ${curTheme.card} space-y-2.5`}>
+            <form onSubmit={createBroadcastAnnouncement} className={`p-4 rounded-xl ${curTheme.card} space-y-2`}>
               <h4 className="text-xs font-mono uppercase font-semibold opacity-75 flex items-center gap-1">
-                <Megaphone className="w-3.5 h-3.5" /> Broadcast Global Announcement
+                <Megaphone className="w-3.5 h-3.5" /> Broadcast Announcement
               </h4>
               <div className="flex gap-2">
                 <input
@@ -2049,22 +2002,22 @@ export default function App() {
                   placeholder="Broadcast message to all students..."
                   value={newAnnouncement}
                   onChange={(e) => setNewAnnouncement(e.target.value)}
-                  className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                 />
-                <button type="submit" className={`px-4 py-2 rounded-lg text-xs font-medium ${curTheme.btnPrimary}`}>
+                <button type="submit" className={`px-4 py-1.5 rounded-lg text-xs font-medium ${curTheme.btnPrimary}`}>
                   Publish
                 </button>
               </div>
             </form>
 
             {/* Student Directory */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
                 Registered Students Directory ({allUsers.length})
               </h4>
               <div className="grid grid-cols-1 gap-2">
                 {allUsers.map((student) => (
-                  <div key={student.id} className={`p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${curTheme.card}`}>
+                  <div key={student.id} className={`p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${curTheme.card}`}>
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold">{student.display_name || student.email.split('@')[0]}</p>
@@ -2073,7 +2026,7 @@ export default function App() {
                           {student.role}
                         </span>
                         {student.preferred_theme === 'birthday' && (
-                          <span className="text-[10px] text-pink-500 font-medium">🎂 Birthday Theme Active</span>
+                          <span className="text-[10px] text-pink-500 font-medium">🎂 Birthday</span>
                         )}
                       </div>
                       <p className="text-xs opacity-60 font-mono">{student.email} • {student.points} XP</p>
@@ -2081,14 +2034,14 @@ export default function App() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         onClick={() => inspectFullStudentDetails(student)}
-                        className={`px-3 py-1 rounded-md text-xs font-medium ${curTheme.btnPrimary}`}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium ${curTheme.btnPrimary}`}
                       >
                         Inspect
                       </button>
 
                       <button
                         onClick={() => toggleBlockUser(student)}
-                        className={`px-2.5 py-1 rounded-md text-xs border border-inherit ${student.is_blocked ? 'text-emerald-600' : 'text-red-500'}`}
+                        className={`px-2 py-1 rounded-md text-xs border border-inherit ${student.is_blocked ? 'text-emerald-600' : 'text-red-500'}`}
                       >
                         {student.is_blocked ? 'Unblock' : 'Block'}
                       </button>
@@ -2103,7 +2056,7 @@ export default function App() {
 
                       <button
                         onClick={() => triggerWhatsAppReminder(student.phone || '', student.display_name || student.email.split('@')[0])}
-                        className="px-2.5 py-1 bg-emerald-600/20 text-emerald-600 rounded-md text-xs font-medium border border-emerald-500/30 flex items-center gap-1"
+                        className="px-2 py-1 bg-emerald-600/20 text-emerald-600 rounded-md text-xs font-medium border border-emerald-500/30 flex items-center gap-1"
                       >
                         <PhoneCall className="w-3 h-3" /> Remind
                       </button>
@@ -2115,56 +2068,44 @@ export default function App() {
 
             {/* FULL STUDENT INSPECTOR MODAL */}
             {viewingStudent && (
-              <div className={`p-5 sm:p-6 rounded-xl space-y-4 border shadow-xl ${curTheme.card}`}>
-                <div className="flex justify-between items-center border-b border-inherit pb-3">
+              <div className={`p-4 sm:p-5 rounded-xl space-y-3.5 border shadow-xl ${curTheme.card}`}>
+                <div className="flex justify-between items-center border-b border-inherit pb-2.5">
                   <div>
-                    <h3 className="text-sm font-bold">Profile Inspector: {viewingStudent.display_name || viewingStudent.email.split('@')[0]}</h3>
+                    <h3 className="text-sm font-bold">Inspector: {viewingStudent.display_name || viewingStudent.email.split('@')[0]}</h3>
                     <p className="text-xs opacity-60">{viewingStudent.email} | Phone: {viewingStudent.phone || 'N/A'}</p>
                   </div>
-                  <button onClick={() => setViewingStudent(null)} className="text-xs border border-inherit px-2.5 py-1 rounded-md">
+                  <button onClick={() => setViewingStudent(null)} className="text-xs border border-inherit px-2 py-1 rounded-md">
                     Close
                   </button>
                 </div>
 
                 {/* Remote Theme Override */}
-                <div className={`p-3.5 rounded-lg border border-inherit space-y-2 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                <div className={`p-3 rounded-lg border border-inherit space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                   <label className="text-xs font-mono font-semibold opacity-75">Assign Student Theme (Remote Override)</label>
                   <div className="flex gap-1.5 flex-wrap">
                     <button
                       onClick={() => setStudentThemeSurprise(viewingStudent.id, 'birthday')}
                       className="px-2.5 py-1 rounded text-xs font-medium bg-pink-500/20 text-pink-500 border border-pink-500/30"
                     >
-                      🎂 Surprise Birthday Theme
+                      🎂 Birthday
                     </button>
                     <button
                       onClick={() => setStudentThemeSurprise(viewingStudent.id, 'slate')}
                       className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
                     >
-                      Deep Slate (Dark 1)
-                    </button>
-                    <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'obsidian')}
-                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
-                    >
-                      Obsidian (Dark 2)
+                      Deep Slate
                     </button>
                     <button
                       onClick={() => setStudentThemeSurprise(viewingStudent.id, 'porcelain')}
                       className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
                     >
-                      Porcelain (Light 1)
-                    </button>
-                    <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'nordic')}
-                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
-                    >
-                      Nordic Sand (Light 2)
+                      Porcelain
                     </button>
                   </div>
                 </div>
 
                 {/* Role & XP Modification */}
-                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                   <div>
                     <label className="text-xs font-semibold opacity-75 block mb-1">Role</label>
                     <div className="flex gap-1">
@@ -2197,54 +2138,6 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                </div>
-
-                {/* Milestones */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-mono font-semibold opacity-75">Scheduled Milestones ({studentEvents.length})</h4>
-                  {studentEvents.length === 0 ? (
-                    <p className="text-xs italic opacity-40">No planned events.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {studentEvents.map((ev) => (
-                        <div key={ev.id} className={`p-2.5 rounded border border-inherit text-xs ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
-                          <div className="flex justify-between font-medium">
-                            <span>{ev.title}</span>
-                            <span className="opacity-60 font-mono">{ev.tag}</span>
-                          </div>
-                          <p className="text-[10px] opacity-50 font-mono mt-0.5">{new Date(ev.start_time).toLocaleString()}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* History Logs */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-mono font-semibold opacity-75">Focus Logs ({studentLogs.length} Days)</h4>
-                  {studentLogs.length === 0 ? (
-                    <p className="text-xs italic opacity-40">No history recorded.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {studentLogs.map((item, i) => (
-                        <div key={i} className={`p-3 rounded border border-inherit text-xs space-y-1 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
-                          <div className="flex justify-between font-mono font-semibold">
-                            <span>{item.date}</span>
-                            <span className={curTheme.accent}>{item.hours_studied} hrs</span>
-                          </div>
-                          {item.blockers && <p className="opacity-75 italic text-[11px]">Blocker: {item.blockers}</p>}
-                          <div className="space-y-0.5 pt-0.5">
-                            {item.tasks?.map((t: any) => (
-                              <div key={t.id} className="flex items-center gap-1 opacity-80 text-[11px]">
-                                <span>{t.is_completed ? '✓' : '•'}</span>
-                                <span className={t.is_completed ? 'line-through opacity-50' : ''}>{t.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -2279,7 +2172,7 @@ export default function App() {
             className={`flex flex-col items-center justify-center p-1.5 min-w-[52px] rounded-lg transition ${activeTab === 'discussions' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <MessageSquare className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Hub & Vault</span>
+            <span className="text-[10px] leading-tight">Hub</span>
           </button>
           
           <button 
