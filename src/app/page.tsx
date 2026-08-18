@@ -33,12 +33,12 @@ interface DailyLog {
 interface Profile {
   id: string;
   email: string;
-  display_name: string;
+  display_name?: string;
   role: 'admin' | 'moderator' | 'student';
   points: number;
   phone?: string;
   is_blocked?: boolean;
-  preferred_theme?: ThemeType;
+  preferred_theme?: string;
 }
 
 interface DiscussionGroup {
@@ -80,6 +80,85 @@ interface Announcement {
   is_active: boolean;
   created_at: string;
 }
+
+// 2 Dark + 2 Light + 1 Birthday with legacy fallbacks
+const themeStyles: Record<string, {
+  bg: string;
+  header: string;
+  card: string;
+  input: string;
+  btnPrimary: string;
+  accent: string;
+  nav: string;
+  isLight: boolean;
+}> = {
+  // DARK 1: Clean Graphite Slate
+  slate: {
+    bg: 'bg-slate-950 text-slate-100',
+    header: 'bg-slate-900/80 border-slate-800',
+    card: 'bg-slate-900/60 border border-slate-800 shadow-sm',
+    input: 'bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:border-blue-500',
+    btnPrimary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
+    accent: 'text-blue-400',
+    nav: 'bg-slate-950/95 border-slate-800',
+    isLight: false
+  },
+  // DARK 2: Deep Obsidian Black
+  obsidian: {
+    bg: 'bg-neutral-950 text-neutral-100',
+    header: 'bg-neutral-900/80 border-neutral-800',
+    card: 'bg-neutral-900/50 border border-neutral-800 shadow-sm',
+    input: 'bg-neutral-950 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:border-emerald-500',
+    btnPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm',
+    accent: 'text-emerald-400',
+    nav: 'bg-neutral-950/95 border-neutral-800',
+    isLight: false
+  },
+  // LIGHT 1: Minimal Porcelain White
+  porcelain: {
+    bg: 'bg-[#f8fafc] text-slate-900',
+    header: 'bg-white/90 border-slate-200 shadow-sm',
+    card: 'bg-white border border-slate-200/80 shadow-sm',
+    input: 'bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-600',
+    btnPrimary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+    accent: 'text-blue-600',
+    nav: 'bg-white/95 border-slate-200 shadow-sm',
+    isLight: true
+  },
+  // LIGHT 2: Nordic Warm Sand
+  nordic: {
+    bg: 'bg-[#faf8f5] text-stone-900',
+    header: 'bg-[#f4f0eb]/90 border-stone-200 shadow-sm',
+    card: 'bg-white border border-stone-200/80 shadow-sm',
+    input: 'bg-[#f6f3ee] border border-stone-300 text-stone-900 placeholder-stone-400 focus:border-amber-700',
+    btnPrimary: 'bg-stone-800 hover:bg-stone-900 text-white shadow-sm',
+    accent: 'text-amber-700',
+    nav: 'bg-[#f4f0eb]/95 border-stone-200 shadow-sm',
+    isLight: true
+  },
+  // SPECIAL: Subtle Birthday Theme
+  birthday: {
+    bg: 'bg-[#18111e] text-pink-50',
+    header: 'bg-[#22162c]/90 border-pink-900/50',
+    card: 'bg-[#22162c]/60 border border-pink-900/40 shadow-sm',
+    input: 'bg-[#140c1a] border border-pink-900/60 text-pink-100 placeholder-pink-300/40 focus:border-pink-500',
+    btnPrimary: 'bg-pink-600 hover:bg-pink-500 text-white shadow-sm',
+    accent: 'text-pink-400',
+    nav: 'bg-[#18111e]/95 border-pink-900/50',
+    isLight: false
+  }
+};
+
+// Map any legacy theme names safely to the new themes
+const normalizeTheme = (t?: string): ThemeType => {
+  if (t === 'cyber') return 'slate';
+  if (t === 'light') return 'porcelain';
+  if (t === 'sunset') return 'nordic';
+  if (t === 'emerald') return 'obsidian';
+  if (t === 'birthday') return 'birthday';
+  if (t && themeStyles[t]) return t as ThemeType;
+  return 'slate';
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -134,36 +213,27 @@ export default function App() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Auto-recovery for stale chunks
   useEffect(() => {
-    const handleChunkError = (event: ErrorEvent) => {
-      if (
-        event?.message?.includes('Loading chunk') ||
-        event?.message?.includes('Failed to fetch') ||
-        event?.message?.includes('Script error')
-      ) {
-        window.location.reload();
-      }
-    };
-    window.addEventListener('error', handleChunkError);
-    return () => window.removeEventListener('error', handleChunkError);
-  }, []);
-
-  // Initialize and load user profile
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('sq_theme') as ThemeType;
-    if (savedTheme) setTheme(savedTheme);
+    try {
+      const savedTheme = localStorage.getItem('sq_theme');
+      if (savedTheme) setTheme(normalizeTheme(savedTheme));
+    } catch (_) {}
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        await fetchUserProfile(currentUser.id);
-        await loadDailyData(currentUser.id);
-        await loadAnnouncements();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          await fetchUserProfile(currentUser.id);
+          await loadDailyData(currentUser.id);
+          await loadAnnouncements();
+        }
+      } catch (err) {
+        console.error('Init error:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     init();
@@ -186,25 +256,28 @@ export default function App() {
     if (data) {
       setProfile(data);
       setPhoneNumber(data.phone || '');
-      if (data.preferred_theme) {
-        setTheme(data.preferred_theme);
-        localStorage.setItem('sq_theme', data.preferred_theme);
-        if (data.preferred_theme === 'birthday') {
-          confetti({ particleCount: 80, spread: 70, origin: { y: 0.5 } });
-        }
+      const cleanTheme = normalizeTheme(data.preferred_theme);
+      setTheme(cleanTheme);
+      try {
+        localStorage.setItem('sq_theme', cleanTheme);
+      } catch (_) {}
+      if (cleanTheme === 'birthday') {
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.5 } });
       }
     }
   };
 
   const changeTheme = async (newTheme: ThemeType) => {
     setTheme(newTheme);
-    localStorage.setItem('sq_theme', newTheme);
+    try {
+      localStorage.setItem('sq_theme', newTheme);
+    } catch (_) {}
     if (profile) {
       setProfile({ ...profile, preferred_theme: newTheme });
       await supabase.from('profiles').update({ preferred_theme: newTheme }).eq('id', profile.id);
     }
     if (newTheme === 'birthday') {
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
     }
   };
 
@@ -214,7 +287,7 @@ export default function App() {
     if (viewingStudent && viewingStudent.id === studentId) {
       setViewingStudent({ ...viewingStudent, preferred_theme: surpriseTheme });
     }
-    alert(`Surprise theme applied to student!`);
+    alert(`Surprise theme applied!`);
   };
 
   const loadAnnouncements = async () => {
@@ -337,7 +410,7 @@ export default function App() {
       .eq('id', log.id);
 
     await addPoints(Math.round(parsedHours * 25));
-    confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
+    confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
     alert('Study log saved!');
   };
 
@@ -424,7 +497,7 @@ export default function App() {
       .insert([{
         group_id: activeGroup.id,
         user_id: user.id,
-        sender_name: profile?.display_name || 'Scholar',
+        sender_name: profile?.display_name || profile?.email?.split('@')[0] || 'Scholar',
         message: newMessage.trim(),
       }])
       .select()
@@ -584,66 +657,7 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Refined 2 Light + 2 Dark + Subtle Birthday Palettes
-  const themeStyles = {
-    // DARK 1: Clean Graphite Slate
-    slate: {
-      bg: 'bg-slate-950 text-slate-100',
-      header: 'bg-slate-900/80 border-slate-800',
-      card: 'bg-slate-900/60 border border-slate-800 shadow-sm',
-      input: 'bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:border-blue-500',
-      btnPrimary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
-      accent: 'text-blue-400',
-      nav: 'bg-slate-950/95 border-slate-800',
-      isLight: false
-    },
-    // DARK 2: Deep Obsidian Black
-    obsidian: {
-      bg: 'bg-neutral-950 text-neutral-100',
-      header: 'bg-neutral-900/80 border-neutral-800',
-      card: 'bg-neutral-900/50 border border-neutral-800 shadow-sm',
-      input: 'bg-neutral-950 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:border-emerald-500',
-      btnPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm',
-      accent: 'text-emerald-400',
-      nav: 'bg-neutral-950/95 border-neutral-800',
-      isLight: false
-    },
-    // LIGHT 1: Minimal Porcelain White
-    porcelain: {
-      bg: 'bg-[#f8fafc] text-slate-900',
-      header: 'bg-white/90 border-slate-200 shadow-sm',
-      card: 'bg-white border border-slate-200/80 shadow-sm',
-      input: 'bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-600',
-      btnPrimary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
-      accent: 'text-blue-600',
-      nav: 'bg-white/95 border-slate-200 shadow-sm',
-      isLight: true
-    },
-    // LIGHT 2: Nordic Warm Sand
-    nordic: {
-      bg: 'bg-[#faf8f5] text-stone-900',
-      header: 'bg-[#f4f0eb]/90 border-stone-200 shadow-sm',
-      card: 'bg-white border border-stone-200/80 shadow-sm',
-      input: 'bg-[#f6f3ee] border border-stone-300 text-stone-900 placeholder-stone-400 focus:border-amber-700',
-      btnPrimary: 'bg-stone-800 hover:bg-stone-900 text-white shadow-sm',
-      accent: 'text-amber-700',
-      nav: 'bg-[#f4f0eb]/95 border-stone-200 shadow-sm',
-      isLight: true
-    },
-    // SPECIAL: Subtle Birthday Theme
-    birthday: {
-      bg: 'bg-[#18111e] text-pink-50',
-      header: 'bg-[#22162c]/90 border-pink-900/50',
-      card: 'bg-[#22162c]/60 border border-pink-900/40 shadow-sm',
-      input: 'bg-[#140c1a] border border-pink-900/60 text-pink-100 placeholder-pink-300/40 focus:border-pink-500',
-      btnPrimary: 'bg-pink-600 hover:bg-pink-500 text-white shadow-sm',
-      accent: 'text-pink-400',
-      nav: 'bg-[#18111e]/95 border-pink-900/50',
-      isLight: false
-    }
-  };
-
-  const curTheme = themeStyles[theme];
+  const curTheme = themeStyles[theme] || themeStyles.slate;
   const isLight = curTheme.isLight;
 
   const isGlobalAdmin = profile?.role === 'admin';
@@ -653,6 +667,9 @@ export default function App() {
   const isApprovedMember = activeGroup && (
     isGlobalAdmin || myMemberships[activeGroup.id]?.status === 'approved'
   );
+
+  const displayNameDisplay = profile?.display_name || profile?.email?.split('@')[0] || 'User';
+  const avatarLetter = (displayNameDisplay.charAt(0) || 'U').toUpperCase();
 
   if (loading) {
     return (
@@ -987,7 +1004,7 @@ export default function App() {
               <div className="space-y-4">
                 {profile?.role === 'admin' && (
                   <form onSubmit={createGroup} className={`p-4 rounded-xl ${curTheme.card} space-y-2.5`}>
-                    <h3 className="text-xs font-mono uppercase font-semibold opacity-70">
+                    <h3 className="text-xs font-mono uppercase font-semibold opacity-75">
                       Admin: Create New Group
                     </h3>
                     <input
@@ -1076,7 +1093,7 @@ export default function App() {
                       {groupMembersList.map((m) => (
                         <div key={m.id} className={`p-1.5 px-2 rounded border border-inherit text-[11px] shrink-0 flex items-center gap-2 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
                           <div>
-                            <span className="font-medium">{m.profiles?.display_name}</span>
+                            <span className="font-medium">{m.profiles?.display_name || m.profiles?.email?.split('@')[0]}</span>
                             <span className="opacity-50 text-[10px] ml-1">({m.status})</span>
                           </div>
                           {m.status === 'pending' && (
@@ -1108,7 +1125,7 @@ export default function App() {
                     <p className="text-center text-xs italic my-auto opacity-40">No messages yet in this group.</p>
                   ) : (
                     groupMessages.map((msg) => (
-                      <div key={msg.id} className={`p-2.5 rounded-lg max-w-[80%] text-xs ${msg.sender_name === profile?.display_name ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
+                      <div key={msg.id} className={`p-2.5 rounded-lg max-w-[80%] text-xs ${msg.sender_name === displayNameDisplay ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
                         <div className="flex justify-between items-center gap-3 mb-1">
                           <span className="font-bold opacity-90">{msg.sender_name}</span>
                           <span className="text-[10px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -1160,7 +1177,7 @@ export default function App() {
                     </span>
                     <div>
                       <h4 className="text-sm font-semibold">
-                        {student.display_name} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
+                        {student.display_name || student.email.split('@')[0]} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
                       </h4>
                       <p className="text-[11px] opacity-60 capitalize">{student.role}</p>
                     </div>
@@ -1180,10 +1197,10 @@ export default function App() {
           <div className={`max-w-2xl mx-auto p-5 sm:p-6 rounded-xl space-y-5 ${curTheme.card}`}>
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border ${isLight ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-800 text-slate-100 border-slate-700'}`}>
-                {profile?.display_name?.charAt(0).toUpperCase()}
+                {avatarLetter}
               </div>
               <div>
-                <h2 className="text-lg font-bold">{profile?.display_name}</h2>
+                <h2 className="text-lg font-bold">{displayNameDisplay}</h2>
                 <p className="text-xs opacity-60">{profile?.email}</p>
               </div>
             </div>
@@ -1335,7 +1352,7 @@ export default function App() {
                   <div key={student.id} className={`p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${curTheme.card}`}>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold">{student.display_name}</p>
+                        <p className="text-sm font-semibold">{student.display_name || student.email.split('@')[0]}</p>
                         {student.is_blocked && <span className="text-[9px] font-bold bg-red-600 text-white px-1.5 py-0.5 rounded">BLOCKED</span>}
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded uppercase border border-inherit">
                           {student.role}
@@ -1370,7 +1387,7 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => triggerWhatsAppReminder(student.phone || '', student.display_name)}
+                        onClick={() => triggerWhatsAppReminder(student.phone || '', student.display_name || student.email.split('@')[0])}
                         className="px-2 py-1 bg-emerald-600/20 text-emerald-600 rounded-md text-xs font-medium border border-emerald-500/30 flex items-center gap-1"
                       >
                         <PhoneCall className="w-3 h-3" /> Remind
@@ -1386,7 +1403,7 @@ export default function App() {
               <div className={`p-4 sm:p-5 rounded-xl space-y-4 border ${curTheme.card}`}>
                 <div className="flex justify-between items-center border-b border-inherit pb-2.5">
                   <div>
-                    <h3 className="text-sm font-bold">Profile: {viewingStudent.display_name}</h3>
+                    <h3 className="text-sm font-bold">Profile: {viewingStudent.display_name || viewingStudent.email.split('@')[0]}</h3>
                     <p className="text-xs opacity-60">{viewingStudent.email} | Phone: {viewingStudent.phone || 'N/A'}</p>
                   </div>
                   <button onClick={() => setViewingStudent(null)} className="text-xs border border-inherit px-2 py-1 rounded-md">
