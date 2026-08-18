@@ -13,7 +13,7 @@ import {
 import confetti from 'canvas-confetti';
 
 type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'discussions' | 'profile' | 'admin';
-type ThemeType = 'cyber' | 'light' | 'sunset' | 'emerald' | 'birthday';
+type ThemeType = 'slate' | 'obsidian' | 'porcelain' | 'nordic' | 'birthday';
 
 interface Task {
   id: string;
@@ -83,7 +83,7 @@ interface Announcement {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [theme, setTheme] = useState<ThemeType>('cyber');
+  const [theme, setTheme] = useState<ThemeType>('slate');
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,12 +129,12 @@ export default function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
-  // Phone state
+  // Phone profile state
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Auto-recovery for stale chunks
+  // Auto-recovery for stale chunks
   useEffect(() => {
     const handleChunkError = (event: ErrorEvent) => {
       if (
@@ -149,7 +149,7 @@ export default function App() {
     return () => window.removeEventListener('error', handleChunkError);
   }, []);
 
-  // 2. Initialize and load user profile
+  // Initialize and load user profile
   useEffect(() => {
     const savedTheme = localStorage.getItem('sq_theme') as ThemeType;
     if (savedTheme) setTheme(savedTheme);
@@ -190,7 +190,7 @@ export default function App() {
         setTheme(data.preferred_theme);
         localStorage.setItem('sq_theme', data.preferred_theme);
         if (data.preferred_theme === 'birthday') {
-          confetti({ particleCount: 120, spread: 100, origin: { y: 0.4 } });
+          confetti({ particleCount: 80, spread: 70, origin: { y: 0.5 } });
         }
       }
     }
@@ -204,7 +204,7 @@ export default function App() {
       await supabase.from('profiles').update({ preferred_theme: newTheme }).eq('id', profile.id);
     }
     if (newTheme === 'birthday') {
-      confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
     }
   };
 
@@ -214,7 +214,7 @@ export default function App() {
     if (viewingStudent && viewingStudent.id === studentId) {
       setViewingStudent({ ...viewingStudent, preferred_theme: surpriseTheme });
     }
-    alert(`Surprise theme (${surpriseTheme.toUpperCase()}) applied to student!`);
+    alert(`Surprise theme applied to student!`);
   };
 
   const loadAnnouncements = async () => {
@@ -316,11 +316,7 @@ export default function App() {
     setTasks(tasks.map(t => t.id === task.id ? { ...t, is_completed: updatedStatus } : t));
 
     if (updatedStatus) {
-      confetti({ 
-        particleCount: 60, 
-        spread: 70, 
-        origin: { y: 0.75 }
-      });
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.75 } });
       await addPoints(15);
     }
 
@@ -341,8 +337,8 @@ export default function App() {
       .eq('id', log.id);
 
     await addPoints(Math.round(parsedHours * 25));
-    confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } });
-    alert('Progress & Daily XP claimed successfully!');
+    confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
+    alert('Study log saved!');
   };
 
   const savePhone = async () => {
@@ -398,7 +394,7 @@ export default function App() {
 
     if (!error) {
       setMyMemberships({ ...myMemberships, [groupId]: { status: 'pending', role: 'member' } });
-      alert('Join request sent to Group Moderator & Admin!');
+      alert('Join request submitted.');
     }
   };
 
@@ -520,7 +516,7 @@ export default function App() {
   };
 
   const deleteUserAccount = async (userId: string) => {
-    if (!confirm('Are you sure you want to permanently delete this student record?')) return;
+    if (!confirm('Permanently delete this student profile?')) return;
     await supabase.from('profiles').delete().eq('id', userId);
     setAllUsers(allUsers.filter(u => u.id !== userId));
     setViewingStudent(null);
@@ -532,7 +528,7 @@ export default function App() {
     await supabase.from('profiles').update({ points: pts }).eq('id', userId);
     setAllUsers(allUsers.map(u => u.id === userId ? { ...u, points: pts } : u));
     if (viewingStudent) setViewingStudent({ ...viewingStudent, points: pts });
-    alert('XP updated!');
+    alert('Points saved.');
   };
 
   const createBroadcastAnnouncement = async (e: React.FormEvent) => {
@@ -546,7 +542,7 @@ export default function App() {
     if (data) {
       setAnnouncements([data, ...announcements]);
       setNewAnnouncement('');
-      alert('Broadcast Announcement published live to all students!');
+      alert('Announcement posted.');
     }
   };
 
@@ -571,11 +567,11 @@ export default function App() {
 
   const triggerWhatsAppReminder = (studentPhone: string, studentName: string) => {
     if (!studentPhone) {
-      alert('Student has not added a phone number yet.');
+      alert('No phone number configured for this student.');
       return;
     }
     const cleanPhone = studentPhone.replace(/[^0-9]/g, '');
-    const message = encodeURIComponent(`Hey ${studentName}! 🚀 Quick reminder from StudyQuest: Don't break your streak! Complete your daily focus tasks and log your hours tonight.`);
+    const message = encodeURIComponent(`Hey ${studentName}! Friendly reminder from StudyQuest to log your tasks and focus hours tonight! 🚀`);
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
@@ -588,56 +584,67 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Theme Styling Configuration
+  // Refined 2 Light + 2 Dark + Subtle Birthday Palettes
   const themeStyles = {
-    cyber: {
-      bg: 'bg-gradient-to-br from-[#060814] via-[#090d20] to-[#0e071c] text-slate-100',
-      header: 'bg-slate-950/70 border-slate-800/80',
-      card: 'bg-slate-900/60 backdrop-blur-xl border border-slate-800 shadow-lg',
-      input: 'bg-slate-950/80 border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:border-cyan-400',
-      btnPrimary: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white',
-      accent: 'text-cyan-400',
-      nav: 'bg-slate-950/90 border-slate-800/90'
+    // DARK 1: Clean Graphite Slate
+    slate: {
+      bg: 'bg-slate-950 text-slate-100',
+      header: 'bg-slate-900/80 border-slate-800',
+      card: 'bg-slate-900/60 border border-slate-800 shadow-sm',
+      input: 'bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:border-blue-500',
+      btnPrimary: 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm',
+      accent: 'text-blue-400',
+      nav: 'bg-slate-950/95 border-slate-800',
+      isLight: false
     },
-    light: {
-      bg: 'bg-slate-100 text-slate-900',
-      header: 'bg-white/80 border-slate-200',
-      card: 'bg-white/80 backdrop-blur-xl border border-slate-200 shadow-sm',
-      input: 'bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:border-indigo-500',
-      btnPrimary: 'bg-gradient-to-r from-indigo-500 to-cyan-500 hover:opacity-90 text-white',
-      accent: 'text-indigo-600',
-      nav: 'bg-white/95 border-slate-200'
-    },
-    sunset: {
-      bg: 'bg-gradient-to-br from-[#1c0c0e] via-[#241113] to-[#12070a] text-amber-50',
-      header: 'bg-stone-950/80 border-amber-950',
-      card: 'bg-stone-900/70 backdrop-blur-xl border border-amber-900/40 shadow-lg',
-      input: 'bg-stone-950/90 border border-amber-900/50 text-amber-100 placeholder-amber-700/50 focus:border-amber-500',
-      btnPrimary: 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 hover:opacity-90 text-white',
-      accent: 'text-amber-400',
-      nav: 'bg-stone-950/95 border-amber-950'
-    },
-    emerald: {
-      bg: 'bg-gradient-to-br from-[#061410] via-[#092019] to-[#040e0b] text-emerald-50',
-      header: 'bg-slate-950/80 border-emerald-950',
-      card: 'bg-emerald-950/30 backdrop-blur-xl border border-emerald-800/40 shadow-lg',
-      input: 'bg-slate-950/90 border border-emerald-900/60 text-emerald-100 placeholder-emerald-700/50 focus:border-emerald-400',
-      btnPrimary: 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white',
+    // DARK 2: Deep Obsidian Black
+    obsidian: {
+      bg: 'bg-neutral-950 text-neutral-100',
+      header: 'bg-neutral-900/80 border-neutral-800',
+      card: 'bg-neutral-900/50 border border-neutral-800 shadow-sm',
+      input: 'bg-neutral-950 border border-neutral-700 text-neutral-100 placeholder-neutral-500 focus:border-emerald-500',
+      btnPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm',
       accent: 'text-emerald-400',
-      nav: 'bg-slate-950/95 border-emerald-950'
+      nav: 'bg-neutral-950/95 border-neutral-800',
+      isLight: false
     },
+    // LIGHT 1: Minimal Porcelain White
+    porcelain: {
+      bg: 'bg-[#f8fafc] text-slate-900',
+      header: 'bg-white/90 border-slate-200 shadow-sm',
+      card: 'bg-white border border-slate-200/80 shadow-sm',
+      input: 'bg-slate-50 border border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-600',
+      btnPrimary: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
+      accent: 'text-blue-600',
+      nav: 'bg-white/95 border-slate-200 shadow-sm',
+      isLight: true
+    },
+    // LIGHT 2: Nordic Warm Sand
+    nordic: {
+      bg: 'bg-[#faf8f5] text-stone-900',
+      header: 'bg-[#f4f0eb]/90 border-stone-200 shadow-sm',
+      card: 'bg-white border border-stone-200/80 shadow-sm',
+      input: 'bg-[#f6f3ee] border border-stone-300 text-stone-900 placeholder-stone-400 focus:border-amber-700',
+      btnPrimary: 'bg-stone-800 hover:bg-stone-900 text-white shadow-sm',
+      accent: 'text-amber-700',
+      nav: 'bg-[#f4f0eb]/95 border-stone-200 shadow-sm',
+      isLight: true
+    },
+    // SPECIAL: Subtle Birthday Theme
     birthday: {
-      bg: 'bg-gradient-to-br from-[#24081e] via-[#1a082b] to-[#120624] text-pink-50',
-      header: 'bg-purple-950/80 border-pink-500/30',
-      card: 'bg-purple-950/40 backdrop-blur-xl border border-pink-500/30 shadow-[0_0_25px_rgba(236,72,153,0.15)]',
-      input: 'bg-slate-950/90 border border-pink-500/40 text-pink-100 placeholder-pink-300/40 focus:border-pink-400',
-      btnPrimary: 'bg-gradient-to-r from-pink-500 via-purple-500 to-amber-400 hover:opacity-90 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]',
+      bg: 'bg-[#18111e] text-pink-50',
+      header: 'bg-[#22162c]/90 border-pink-900/50',
+      card: 'bg-[#22162c]/60 border border-pink-900/40 shadow-sm',
+      input: 'bg-[#140c1a] border border-pink-900/60 text-pink-100 placeholder-pink-300/40 focus:border-pink-500',
+      btnPrimary: 'bg-pink-600 hover:bg-pink-500 text-white shadow-sm',
       accent: 'text-pink-400',
-      nav: 'bg-purple-950/95 border-pink-500/30'
+      nav: 'bg-[#18111e]/95 border-pink-900/50',
+      isLight: false
     }
   };
 
   const curTheme = themeStyles[theme];
+  const isLight = curTheme.isLight;
 
   const isGlobalAdmin = profile?.role === 'admin';
   const isGroupModerator = activeGroup && (
@@ -650,7 +657,7 @@ export default function App() {
   if (loading) {
     return (
       <div className={`flex h-screen items-center justify-center font-mono text-sm tracking-widest ${curTheme.bg}`}>
-        <Sparkles className="w-5 h-5 mr-2 animate-spin text-purple-500" /> LOADING STUDYQUEST...
+        <Sparkles className="w-5 h-5 mr-2 animate-spin text-blue-500" /> LOADING STUDYQUEST...
       </div>
     );
   }
@@ -658,49 +665,49 @@ export default function App() {
   if (!user) {
     return (
       <div className={`flex min-h-screen items-center justify-center p-4 ${curTheme.bg}`}>
-        <div className={`w-full max-w-md rounded-3xl p-8 border shadow-2xl backdrop-blur-2xl ${curTheme.card}`}>
+        <div className={`w-full max-w-md rounded-2xl p-8 border shadow-lg ${curTheme.card}`}>
           <div className="flex justify-center mb-5">
-            <div className="p-4 rounded-2xl border shadow-inner bg-cyan-500/10 border-cyan-500/30">
-              <Sparkles className="w-8 h-8 text-cyan-400 animate-pulse" />
+            <div className={`p-3.5 rounded-xl border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800/60 border-slate-700'}`}>
+              <Sparkles className={`w-6 h-6 ${curTheme.accent}`} />
             </div>
           </div>
-          <h1 className="text-2xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 tracking-tight">
+          <h1 className="text-xl font-bold text-center tracking-tight mb-1">
             STUDYQUEST
           </h1>
-          <p className="text-xs text-center mb-6 font-medium text-slate-400">Daily Mastery • Group Discussion • Leaderboards</p>
+          <p className="text-xs text-center mb-6 opacity-60">Focus Tracker & Group Discussion</p>
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider block mb-1.5 opacity-80">Email</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 opacity-75">Email</label>
               <input
                 type="email"
                 placeholder="you@college.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                 required
               />
             </div>
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider block mb-1.5 opacity-80">Password</label>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 opacity-75">Password</label>
               <input
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                 required
               />
             </div>
             <button
               type="submit"
-              className={`w-full py-3 font-bold rounded-xl text-sm transition shadow-lg ${curTheme.btnPrimary}`}
+              className={`w-full py-2.5 font-semibold rounded-lg text-sm transition ${curTheme.btnPrimary}`}
             >
-              {authMode === 'login' ? 'Enter Academy 🚀' : 'Start Journey ✨'}
+              {authMode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
           <button
             onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-            className="w-full text-center text-xs mt-5 text-slate-400 hover:opacity-80 transition"
+            className="w-full text-center text-xs mt-4 opacity-60 hover:opacity-100 transition"
           >
             {authMode === 'login' ? "New student? Create an account" : "Have an account? Sign in"}
           </button>
@@ -713,24 +720,24 @@ export default function App() {
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   return (
-    <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-300`}>
-      {/* Top Navbar */}
-      <header className={`sticky top-0 z-50 backdrop-blur-xl border-b px-4 py-3 ${curTheme.header}`}>
+    <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-200`}>
+      {/* Top Header */}
+      <header className={`sticky top-0 z-50 backdrop-blur-md border-b px-4 py-3 ${curTheme.header}`}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 text-lg flex items-center gap-1.5">
-              {theme === 'birthday' && <Cake className="w-5 h-5 text-pink-400 animate-bounce" />}
+            <span className="font-bold tracking-tight text-base flex items-center gap-1.5">
+              {theme === 'birthday' && <Cake className="w-4 h-4 text-pink-400" />}
               STUDYQUEST
             </span>
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-bold">
-              <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400 animate-bounce" />
+            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${isLight ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'}`}>
+              <Flame className="w-3.5 h-3.5 fill-current" />
               <span>{profile?.points || 0} XP</span>
             </div>
           </div>
 
           <button 
             onClick={handleSignOut} 
-            className="text-xs p-2 rounded-xl border border-white/10 hover:text-red-400 transition"
+            className="text-xs p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:text-red-500 transition"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -739,80 +746,74 @@ export default function App() {
 
       {/* Broadcast Announcement Bar */}
       {announcements.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-md">
-          <Megaphone className="w-4 h-4 animate-bounce shrink-0" />
+        <div className={`px-4 py-1.5 text-xs font-medium flex items-center justify-center gap-2 border-b ${isLight ? 'bg-blue-50 text-blue-800 border-blue-100' : 'bg-blue-950/50 text-blue-200 border-blue-900/50'}`}>
+          <Megaphone className="w-3.5 h-3.5 shrink-0" />
           <span>{announcements[0].message}</span>
         </div>
       )}
 
-      {/* Birthday Banner if in Birthday Theme */}
+      {/* Subtle Birthday Notification Banner */}
       {theme === 'birthday' && (
-        <div className="bg-gradient-to-r from-pink-600 via-purple-600 to-amber-500 text-white px-4 py-2 text-xs font-black text-center flex items-center justify-center gap-2 shadow-lg">
-          <PartyPopper className="w-4 h-4 animate-spin" />
-          🎉 HAPPY BIRTHDAY! Wishing you massive milestones and study breakthroughs this year! 🎂
+        <div className="bg-pink-950/40 border-b border-pink-900/50 text-pink-200 px-4 py-1.5 text-xs font-medium text-center flex items-center justify-center gap-2">
+          <PartyPopper className="w-3.5 h-3.5 text-pink-400" />
+          Happy Birthday! Wishing you focus and success in your studies this year.
         </div>
       )}
 
       {/* Blocked Account Banner */}
       {profile?.is_blocked && (
-        <div className="bg-red-600 text-white px-4 py-2.5 text-xs font-black text-center flex items-center justify-center gap-2">
+        <div className="bg-red-600 text-white px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2">
           <Ban className="w-4 h-4 shrink-0" />
-          ACCOUNT BLOCKED: Logging tasks and social discussions are currently suspended.
+          Account suspended. Task logs and community access are currently restricted.
         </div>
       )}
 
-      {/* Main Content Body */}
-      <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 pb-36 flex-1 relative z-10">
+      {/* Main Container */}
+      <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 pb-36 flex-1">
         
-        {/* TAB 1: TODAY'S DASHBOARD */}
+        {/* TAB 1: TODAY'S FOCUS */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            {/* Metric Cards */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`p-5 rounded-2xl border ${curTheme.card}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider font-mono opacity-75">Today's Focus</span>
-                  <Clock className={`w-4 h-4 ${curTheme.accent}`} />
-                </div>
-                <p className="text-3xl font-black">{hours} <span className="text-sm font-normal opacity-60">hours</span></p>
+          <div className="space-y-5 max-w-2xl mx-auto">
+            {/* Metric Overview */}
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className={`p-4 rounded-xl ${curTheme.card}`}>
+                <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">Today's Focus</span>
+                <p className="text-2xl font-bold mt-0.5">{hours} <span className="text-xs font-normal opacity-60">hours</span></p>
               </div>
 
-              <div className={`p-5 rounded-2xl border ${curTheme.card}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider font-mono opacity-75">Tasks Finished</span>
-                  <Target className="w-4 h-4 text-emerald-400" />
-                </div>
-                <p className="text-3xl font-black">{completedCount} <span className="text-sm font-normal opacity-60">/ {tasks.length}</span></p>
+              <div className={`p-4 rounded-xl ${curTheme.card}`}>
+                <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">Tasks Completed</span>
+                <p className="text-2xl font-bold mt-0.5">{completedCount} <span className="text-xs font-normal opacity-60">/ {tasks.length}</span></p>
               </div>
             </div>
 
-            {/* Glowing Progress Bar */}
-            <section className={`p-5 rounded-2xl ${curTheme.card} space-y-2.5`}>
-              <div className="flex justify-between text-xs font-semibold">
-                <span>Daily Mastery Level</span>
-                <span className={`${curTheme.accent} font-mono`}>{progress}%</span>
+            {/* Clean Progress Line */}
+            <section className={`p-4 rounded-xl ${curTheme.card} space-y-2`}>
+              <div className="flex justify-between text-xs font-medium">
+                <span>Daily Completion</span>
+                <span className={`font-mono ${curTheme.accent}`}>{progress}%</span>
               </div>
-              <div className="w-full rounded-full h-3 overflow-hidden p-0.5 border border-white/10 bg-black/20">
+              <div className={`w-full rounded-full h-2 overflow-hidden ${isLight ? 'bg-slate-200' : 'bg-slate-800'}`}>
                 <div
-                  className="bg-gradient-to-r from-cyan-500 via-indigo-500 to-pink-500 h-full rounded-full transition-all duration-500"
+                  className={`h-full transition-all duration-300 ${isLight ? 'bg-blue-600' : 'bg-blue-500'}`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
             </section>
 
-            {/* New Task Entry */}
-            <form onSubmit={addTask} className={`p-4 sm:p-5 rounded-2xl ${curTheme.card} space-y-3`}>
+            {/* Task Add Form */}
+            <form onSubmit={addTask} className={`p-4 rounded-xl ${curTheme.card} space-y-2.5`}>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="What will you conquer next? (e.g. Backpropagation Math)"
+                  placeholder="Add target study task..."
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  className={`flex-1 rounded-xl px-4 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                 />
                 <button 
                   type="submit" 
-                  className={`px-5 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-1.5 shrink-0 shadow-md ${curTheme.btnPrimary}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
                 >
                   <Plus className="w-4 h-4" /> Add
                 </button>
@@ -823,51 +824,44 @@ export default function App() {
                     key={tier}
                     type="button"
                     onClick={() => setNewTaskTier(tier)}
-                    className={`flex-1 py-2 text-xs rounded-xl border font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-1.5 text-xs rounded-md border font-medium transition ${
                       newTaskTier === tier 
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' 
-                        : 'border-white/10 opacity-70 hover:opacity-100'
+                        ? (isLight ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-900 border-slate-100 font-semibold')
+                        : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
                   >
-                    {tier === 'LEARN' && <BookOpen className="w-3.5 h-3.5 text-cyan-400" />}
-                    {tier === 'APPLY' && <Code2 className="w-3.5 h-3.5 text-emerald-400" />}
-                    {tier === 'REVIEW' && <RotateCcw className="w-3.5 h-3.5 text-amber-400" />}
                     {tier}
                   </button>
                 ))}
               </div>
             </form>
 
-            {/* Task Item List */}
-            <div className="space-y-2.5">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider font-mono flex items-center gap-2 opacity-70">
-                <Target className="w-3.5 h-3.5 text-purple-400" /> Today's Action Items
+            {/* Action Item List */}
+            <div className="space-y-2">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">
+                Action Items
               </h2>
               {tasks.length === 0 ? (
-                <div className={`text-sm italic p-6 rounded-2xl text-center border border-white/10 ${curTheme.card}`}>
-                  No targets configured yet. Add your first goal above!
+                <div className={`text-xs italic p-4 rounded-xl text-center opacity-60 ${curTheme.card}`}>
+                  No tasks scheduled for today yet.
                 </div>
               ) : (
                 tasks.map((task) => (
                   <div 
                     key={task.id} 
-                    className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-                      task.is_completed 
-                        ? 'opacity-50 border-white/5 bg-black/10' 
-                        : `${curTheme.card} shadow-sm`
-                    }`}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition ${                       task.is_completed ? 'opacity-40' : ''                     } ${curTheme.card}`}
                   >
-                    <div onClick={() => toggleTask(task)} className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                    <div onClick={() => toggleTask(task)} className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
                       {task.is_completed ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       ) : (
-                        <Circle className="w-5 h-5 opacity-40 hover:opacity-100 shrink-0" />
+                        <Circle className="w-4 h-4 opacity-40 hover:opacity-100 shrink-0" />
                       )}
-                      <span className={`text-sm font-medium truncate ${task.is_completed ? 'line-through' : ''}`}>
+                      <span className={`text-sm truncate ${task.is_completed ? 'line-through' : ''}`}>
                         {task.title}
                       </span>
                     </div>
-                    <button onClick={() => deleteTask(task.id)} className="opacity-50 hover:text-red-400 p-1 transition ml-2 shrink-0">
+                    <button onClick={() => deleteTask(task.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -875,40 +869,40 @@ export default function App() {
               )}
             </div>
 
-            {/* Evening Reflection */}
-            <section className={`p-5 rounded-2xl ${curTheme.card} space-y-4`}>
-              <h2 className="text-[11px] font-bold uppercase tracking-wider font-mono flex items-center gap-2 opacity-70">
-                <Award className="w-3.5 h-3.5 text-amber-400" /> Daily Summary & Reflection
+            {/* Evening Log */}
+            <section className={`p-4 rounded-xl ${curTheme.card} space-y-3.5`}>
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">
+                Daily Log & Reflection
               </h2>
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold mb-1.5">
-                  <Clock className={`w-3.5 h-3.5 ${curTheme.accent}`} /> Total Hours Studied Today
+                <label className="flex items-center gap-1 text-xs mb-1 font-medium opacity-80">
+                  <Clock className="w-3.5 h-3.5" /> Total Hours Studied
                 </label>
                 <input
                   type="number"
                   step="0.25"
                   value={hours}
                   onChange={(e) => setHours(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none transition ${curTheme.input}`}
+                  className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                 />
               </div>
               <div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold mb-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Doubts, Blockers & Questions
+                <label className="flex items-center gap-1 text-xs mb-1 font-medium opacity-80">
+                  <AlertCircle className="w-3.5 h-3.5" /> Blockers / Doubts
                 </label>
                 <textarea
                   rows={2}
                   value={blockers}
                   onChange={(e) => setBlockers(e.target.value)}
-                  placeholder="What concepts challenged you or need revision?"
-                  className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none transition ${curTheme.input}`}
+                  placeholder="Any difficult concepts or revision blockers today?"
+                  className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                 />
               </div>
               <button 
                 onClick={saveDailyLog} 
-                className={`w-full py-3 font-bold rounded-xl text-sm transition shadow-md ${curTheme.btnPrimary}`}
+                className={`w-full py-2.5 font-medium rounded-lg text-sm transition ${curTheme.btnPrimary}`}
               >
-                Log Day & Claim XP 🔥
+                Save Progress & Claim XP
               </button>
             </section>
           </div>
@@ -916,30 +910,30 @@ export default function App() {
 
         {/* TAB 2: CALENDAR & PLANNER */}
         {activeTab === 'calendar' && (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            <div className={`p-5 rounded-2xl ${curTheme.card} space-y-4`}>
-              <h2 className="text-sm font-bold flex items-center gap-2">
-                <CalendarIcon className={`w-4 h-4 ${curTheme.accent}`} /> Schedule Study Milestones & Exams
+          <div className="space-y-5 max-w-2xl mx-auto">
+            <div className={`p-4 rounded-xl ${curTheme.card} space-y-3`}>
+              <h2 className="text-sm font-semibold flex items-center gap-1.5">
+                <CalendarIcon className="w-4 h-4 opacity-70" /> Schedule Study Milestones
               </h2>
-              <form onSubmit={addEvent} className="space-y-3">
+              <form onSubmit={addEvent} className="space-y-2.5">
                 <input
                   type="text"
-                  placeholder="Milestone (e.g. Deep Learning Module 4 Exam Prep)"
+                  placeholder="Exam or project milestone..."
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
-                  className={`w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition ${curTheme.input}`}
+                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                 />
                 <div className="flex gap-2">
                   <input
                     type="datetime-local"
                     value={newEventDate}
                     onChange={(e) => setNewEventDate(e.target.value)}
-                    className={`flex-1 rounded-xl px-3.5 py-2 text-sm outline-none transition ${curTheme.input}`}
+                    className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none transition ${curTheme.input}`}
                   />
                   <select
                     value={newEventTag}
                     onChange={(e) => setNewEventTag(e.target.value)}
-                    className={`rounded-xl px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                    className={`rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                   >
                     <option>General</option>
                     <option>Exam</option>
@@ -949,33 +943,33 @@ export default function App() {
                 </div>
                 <button
                   type="submit"
-                  className={`w-full py-2.5 rounded-xl text-sm font-bold shadow-md transition ${curTheme.btnPrimary}`}
+                  className={`w-full py-2 rounded-lg text-sm font-medium transition ${curTheme.btnPrimary}`}
                 >
                   Add Milestone
                 </button>
               </form>
             </div>
 
-            <div className="space-y-2.5">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider font-mono flex items-center gap-2 opacity-70">
-                <CalendarCheck className="w-3.5 h-3.5 text-emerald-400" /> Scheduled Milestones ({events.length})
+            <div className="space-y-2">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">
+                Scheduled Events ({events.length})
               </h3>
               {events.length === 0 ? (
-                <p className={`text-sm italic p-6 rounded-2xl text-center border border-white/10 ${curTheme.card}`}>
-                  No upcoming calendar events scheduled.
+                <p className={`text-xs italic p-4 rounded-xl text-center opacity-60 ${curTheme.card}`}>
+                  No calendar milestones added.
                 </p>
               ) : (
                 events.map((ev) => (
-                  <div key={ev.id} className={`p-4 rounded-xl flex items-center justify-between border ${curTheme.card}`}>
+                  <div key={ev.id} className={`p-3 rounded-lg flex items-center justify-between ${curTheme.card}`}>
                     <div>
-                      <h4 className="text-sm font-bold">{ev.title}</h4>
-                      <p className={`text-xs ${curTheme.accent} font-mono mt-0.5`}>{new Date(ev.start_time).toLocaleString()}</p>
+                      <h4 className="text-sm font-medium">{ev.title}</h4>
+                      <p className="text-xs opacity-60 font-mono mt-0.5">{new Date(ev.start_time).toLocaleString()}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
+                      <span className={`text-xs px-2 py-0.5 rounded border font-medium ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}>
                         {ev.tag}
                       </span>
-                      <button onClick={() => deleteEvent(ev.id)} className="opacity-50 hover:text-red-400 p-1">
+                      <button onClick={() => deleteEvent(ev.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -988,70 +982,70 @@ export default function App() {
 
         {/* TAB 3: DISCUSSION GROUPS */}
         {activeTab === 'discussions' && (
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-3xl mx-auto space-y-5">
             {!activeGroup ? (
               <div className="space-y-4">
                 {profile?.role === 'admin' && (
-                  <form onSubmit={createGroup} className={`p-5 rounded-2xl ${curTheme.card} space-y-3`}>
-                    <h3 className="text-xs font-mono uppercase text-purple-400 font-bold flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" /> Admin: Launch New Discussion Hub
+                  <form onSubmit={createGroup} className={`p-4 rounded-xl ${curTheme.card} space-y-2.5`}>
+                    <h3 className="text-xs font-mono uppercase font-semibold opacity-70">
+                      Admin: Create New Group
                     </h3>
                     <input
                       type="text"
-                      placeholder="Group Title (e.g. Deep Learning & ML Q&A)"
+                      placeholder="Group Title (e.g. Machine Learning Study Group)"
                       value={newGroupName}
                       onChange={(e) => setNewGroupName(e.target.value)}
-                      className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                      className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
                     />
                     <input
                       type="text"
-                      placeholder="Hub Description"
+                      placeholder="Group Description"
                       value={newGroupDesc}
                       onChange={(e) => setNewGroupDesc(e.target.value)}
-                      className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                      className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
                     />
-                    <button type="submit" className={`px-4 py-2 rounded-xl text-sm font-bold shadow-md ${curTheme.btnPrimary}`}>
+                    <button type="submit" className={`px-4 py-2 rounded-lg text-sm font-medium ${curTheme.btnPrimary}`}>
                       Create Group
                     </button>
                   </form>
                 )}
 
-                <h3 className="text-[11px] font-bold uppercase tracking-wider font-mono opacity-70">Available Study Communities</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">Discussion Hubs</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {groups.map((grp) => {
                     const membership = myMemberships[grp.id];
                     const isApproved = isGlobalAdmin || membership?.status === 'approved';
                     const isMod = isGlobalAdmin || membership?.role === 'moderator';
 
                     return (
-                      <div key={grp.id} className={`p-5 rounded-2xl flex flex-col justify-between space-y-4 ${curTheme.card}`}>
+                      <div key={grp.id} className={`p-4 rounded-xl flex flex-col justify-between space-y-3 ${curTheme.card}`}>
                         <div>
                           <div className="flex items-center justify-between">
-                            <h4 className="text-base font-bold">{grp.title}</h4>
+                            <h4 className="text-sm font-bold">{grp.title}</h4>
                             {isMod && (
-                              <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                <Shield className="w-3 h-3" /> Moderator
+                              <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${isLight ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-blue-950/60 text-blue-300 border-blue-800'}`}>
+                                Moderator
                               </span>
                             )}
                           </div>
-                          <p className="text-xs opacity-75 mt-1">{grp.description || 'Community Q&A and doubt clearance.'}</p>
+                          <p className="text-xs opacity-60 mt-1">{grp.description || 'General study discussion.'}</p>
                         </div>
-                        <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+                        <div className="pt-2 border-t border-inherit flex items-center justify-between">
                           {isApproved ? (
                             <button
                               onClick={() => loadGroupMessagesAndMembers(grp)}
-                              className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md hover:opacity-90 transition ${curTheme.btnPrimary}`}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${curTheme.btnPrimary}`}
                             >
-                              Enter Room 💬
+                              Enter Discussion
                             </button>
                           ) : membership?.status === 'pending' ? (
-                            <span className="text-xs text-amber-400 font-mono font-semibold">⏳ Approval Pending</span>
+                            <span className="text-xs text-amber-500 font-mono">Pending Approval</span>
                           ) : (
                             <button
                               onClick={() => requestToJoinGroup(grp.id)}
-                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 rounded-xl text-xs font-semibold transition"
+                              className={`px-3 py-1.5 border rounded-lg text-xs font-medium transition ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-800 border-slate-700'}`}
                             >
-                              Request Access
+                              Request to Join
                             </button>
                           )}
                         </div>
@@ -1061,46 +1055,44 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className={`rounded-2xl flex flex-col h-[650px] shadow-2xl overflow-hidden border ${curTheme.card}`}>
-                <div className="p-4 border-b border-white/10 bg-black/20 flex justify-between items-center">
+              <div className={`rounded-xl flex flex-col h-[600px] border ${curTheme.card} overflow-hidden`}>
+                <div className="p-3.5 border-b border-inherit flex justify-between items-center">
                   <div>
-                    <h3 className="font-bold flex items-center gap-2">
+                    <h3 className="font-bold text-sm flex items-center gap-1.5">
                       {activeGroup.title}
-                      {isGroupModerator && <span className="text-[10px] bg-purple-500/30 text-purple-300 px-2 py-0.5 rounded font-mono">MODERATOR MODE</span>}
+                      {isGroupModerator && <span className="text-[10px] opacity-60 font-mono">(Moderator)</span>}
                     </h3>
-                    <p className="text-xs opacity-70">{activeGroup.description}</p>
+                    <p className="text-xs opacity-60">{activeGroup.description}</p>
                   </div>
-                  <button onClick={() => setActiveGroup(null)} className="text-xs border border-white/10 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 transition">
-                    Back to Hub
+                  <button onClick={() => setActiveGroup(null)} className="text-xs border border-inherit px-2.5 py-1 rounded-md opacity-75 hover:opacity-100">
+                    Back
                   </button>
                 </div>
 
                 {isGroupModerator && (
-                  <div className="bg-purple-950/20 border-b border-purple-500/20 p-3 text-xs space-y-2">
-                    <span className="font-bold font-mono text-purple-400 uppercase flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Group Moderation: Members & Requests
-                    </span>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className={`p-2.5 border-b border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
+                    <span className="font-semibold text-[11px] opacity-75 block">Group Requests & Members:</span>
+                    <div className="flex gap-2 overflow-x-auto pb-0.5">
                       {groupMembersList.map((m) => (
-                        <div key={m.id} className="p-2 rounded-lg bg-black/30 border border-white/10 shrink-0 flex items-center gap-2">
+                        <div key={m.id} className={`p-1.5 px-2 rounded border border-inherit text-[11px] shrink-0 flex items-center gap-2 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
                           <div>
-                            <p className="font-bold text-[11px]">{m.profiles?.display_name}</p>
-                            <p className="text-[9px] opacity-60">{m.status} • {m.role}</p>
+                            <span className="font-medium">{m.profiles?.display_name}</span>
+                            <span className="opacity-50 text-[10px] ml-1">({m.status})</span>
                           </div>
                           {m.status === 'pending' && (
                             <div className="flex gap-1">
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'approved')} className="p-1 bg-emerald-600 text-white rounded">
-                                <Check className="w-3 h-3" />
+                              <button onClick={() => updateGroupMemberStatus(m.id, 'approved')} className="p-0.5 text-emerald-600">
+                                <Check className="w-3.5 h-3.5" />
                               </button>
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'rejected')} className="p-1 bg-red-600 text-white rounded">
-                                <X className="w-3 h-3" />
+                              <button onClick={() => updateGroupMemberStatus(m.id, 'rejected')} className="p-0.5 text-red-500">
+                                <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           )}
                           {isGlobalAdmin && m.status === 'approved' && (
                             <button 
                               onClick={() => toggleGroupModerator(m.id, m.role)}
-                              className={`text-[9px] px-1.5 py-0.5 rounded border ${m.role === 'moderator' ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/20'}`}
+                              className={`text-[9px] px-1 rounded border border-inherit ${m.role === 'moderator' ? 'bg-blue-600 text-white' : ''}`}
                             >
                               {m.role === 'moderator' ? 'Mod' : 'Make Mod'}
                             </button>
@@ -1111,14 +1103,14 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5">
                   {groupMessages.length === 0 ? (
-                    <p className="text-center text-xs italic my-auto opacity-50">No questions yet. Ask your question below!</p>
+                    <p className="text-center text-xs italic my-auto opacity-40">No messages yet in this group.</p>
                   ) : (
                     groupMessages.map((msg) => (
-                      <div key={msg.id} className={`p-3.5 rounded-2xl max-w-[80%] shadow-sm ${msg.sender_name === profile?.display_name ? 'ml-auto bg-cyan-950/60 border border-cyan-500/40' : 'bg-black/30 border border-white/10'}`}>
-                        <div className="flex justify-between items-center gap-4 mb-1">
-                          <span className={`text-xs font-bold ${curTheme.accent}`}>{msg.sender_name}</span>
+                      <div key={msg.id} className={`p-2.5 rounded-lg max-w-[80%] text-xs ${msg.sender_name === profile?.display_name ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
+                        <div className="flex justify-between items-center gap-3 mb-1">
+                          <span className="font-bold opacity-90">{msg.sender_name}</span>
                           <span className="text-[10px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                         <p className="text-sm">{msg.message}</p>
@@ -1127,16 +1119,16 @@ export default function App() {
                   )}
                 </div>
 
-                <form onSubmit={postGroupMessage} className="p-3 border-t border-white/10 bg-black/20 flex gap-2">
+                <form onSubmit={postGroupMessage} className="p-2.5 border-t border-inherit flex gap-2">
                   <input
                     type="text"
-                    placeholder={isApprovedMember ? "Type your question or solution..." : "Join group to post questions"}
+                    placeholder={isApprovedMember ? "Type a question or message..." : "Join group to chat"}
                     disabled={!isApprovedMember}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className={`flex-1 rounded-xl px-4 py-2.5 text-sm outline-none ${curTheme.input}`}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
                   />
-                  <button type="submit" disabled={!isApprovedMember} className={`p-3 rounded-xl shadow-lg ${curTheme.btnPrimary}`}>
+                  <button type="submit" disabled={!isApprovedMember} className={`p-2 rounded-lg ${curTheme.btnPrimary}`}>
                     <Send className="w-4 h-4" />
                   </button>
                 </form>
@@ -1147,34 +1139,34 @@ export default function App() {
 
         {/* TAB 4: LEADERBOARD */}
         {activeTab === 'leaderboard' && (
-          <div className="max-w-2xl mx-auto space-y-5">
-            <div className={`p-6 rounded-3xl text-center border ${curTheme.card}`}>
-              <Trophy className="w-12 h-12 text-amber-400 mx-auto mb-2 animate-bounce" />
-              <h2 className="text-xl font-black">Monthly Scholar Leaderboard</h2>
-              <p className="text-xs mt-1 font-medium opacity-70">Rankings calculated by tasks finished and consistent focus hours.</p>
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className={`p-5 rounded-xl text-center ${curTheme.card}`}>
+              <Trophy className="w-8 h-8 text-amber-500 mx-auto mb-1.5" />
+              <h2 className="text-base font-bold">Monthly Rankings</h2>
+              <p className="text-xs opacity-60">Points earned from consistent daily focus and completed tasks.</p>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {leaderboard.map((student, idx) => (
                 <div
                   key={student.id}
-                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                    student.id === user.id ? 'border-cyan-500/50 bg-cyan-950/30' : curTheme.card
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    student.id === user.id ? (isLight ? 'bg-blue-50 border-blue-300 font-medium' : 'bg-slate-800/80 border-slate-700 font-medium') : curTheme.card
                   }`}
                 >
-                  <div className="flex items-center gap-3.5">
-                    <span className={`font-mono text-sm w-7 font-black ${idx === 0 ? 'text-amber-400 text-base' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'opacity-50'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm w-5 font-bold opacity-60">
                       #{idx + 1}
                     </span>
                     <div>
-                      <h4 className="text-sm font-bold">
-                        {student.display_name} {student.id === user.id && <span className={`text-xs ${curTheme.accent} font-semibold`}>(You)</span>}
+                      <h4 className="text-sm font-semibold">
+                        {student.display_name} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
                       </h4>
-                      <p className="text-xs font-mono opacity-60 capitalize">{student.role}</p>
+                      <p className="text-[11px] opacity-60 capitalize">{student.role}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-amber-400 font-black text-sm">
-                    <Flame className="w-4 h-4 fill-amber-400" />
+                  <div className="flex items-center gap-1 font-bold text-sm opacity-90">
+                    <Flame className="w-4 h-4 text-amber-500 fill-current" />
                     <span>{student.points} XP</span>
                   </div>
                 </div>
@@ -1183,187 +1175,205 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PROFILE WITH EMBEDDED THEME CONTROLS */}
+        {/* TAB 5: PROFILE WITH CLEAN 2 LIGHT / 2 DARK THEMES */}
         {activeTab === 'profile' && (
-          <div className={`max-w-2xl mx-auto p-6 sm:p-8 rounded-3xl space-y-6 ${curTheme.card}`}>
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-gradient-to-tr from-cyan-500 via-indigo-500 to-pink-500 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-md">
+          <div className={`max-w-2xl mx-auto p-5 sm:p-6 rounded-xl space-y-5 ${curTheme.card}`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border ${isLight ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-800 text-slate-100 border-slate-700'}`}>
                 {profile?.display_name?.charAt(0).toUpperCase()}
               </div>
               <div>
-                <h2 className="text-xl font-black">{profile?.display_name}</h2>
-                <p className="text-xs opacity-70">{profile?.email}</p>
+                <h2 className="text-lg font-bold">{profile?.display_name}</h2>
+                <p className="text-xs opacity-60">{profile?.email}</p>
               </div>
             </div>
 
-            {/* THEME SELECTION SECTION */}
-            <div className="space-y-3 p-4 rounded-2xl border border-white/10 bg-black/20">
-              <label className="text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2">
-                <Palette className="w-4 h-4 text-purple-400" /> Custom App Theme & Style
+            {/* 2 LIGHT + 2 DARK THEME PICKER */}
+            <div className={`space-y-3 p-3.5 rounded-xl border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+              <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5" /> Appearance & Theme
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+              
+              <div className="grid grid-cols-2 gap-2">
+                {/* Dark 1 */}
                 <button
                   type="button"
-                  onClick={() => changeTheme('cyber')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'cyber' ? 'border-cyan-400 bg-cyan-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                  onClick={() => changeTheme('slate')}
+                  className={`p-3 rounded-lg border text-left transition ${theme === 'slate' ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-inherit opacity-70 hover:opacity-100'}`}
                 >
-                  <span className="text-xs font-bold text-cyan-400">Cyber Dark</span>
-                  <span className="text-[10px] opacity-60">Neon & Slate</span>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-3 h-3 rounded-full bg-slate-900 border border-slate-600" />
+                    <span className="text-xs">Deep Slate</span>
+                  </div>
+                  <p className="text-[10px] opacity-50">Dark Mode 1 (Graphite)</p>
                 </button>
 
+                {/* Dark 2 */}
                 <button
                   type="button"
-                  onClick={() => changeTheme('light')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'light' ? 'border-indigo-500 bg-indigo-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                  onClick={() => changeTheme('obsidian')}
+                  className={`p-3 rounded-lg border text-left transition ${theme === 'obsidian' ? 'border-emerald-500 bg-emerald-500/10 font-bold' : 'border-inherit opacity-70 hover:opacity-100'}`}
                 >
-                  <span className="text-xs font-bold text-indigo-400">Crisp Light</span>
-                  <span className="text-[10px] opacity-60">Clean White</span>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-3 h-3 rounded-full bg-neutral-950 border border-neutral-700" />
+                    <span className="text-xs">Obsidian Black</span>
+                  </div>
+                  <p className="text-[10px] opacity-50">Dark Mode 2 (OLED)</p>
                 </button>
 
+                {/* Light 1 */}
                 <button
                   type="button"
-                  onClick={() => changeTheme('sunset')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'sunset' ? 'border-amber-400 bg-amber-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                  onClick={() => changeTheme('porcelain')}
+                  className={`p-3 rounded-lg border text-left transition ${theme === 'porcelain' ? 'border-blue-600 bg-blue-50 font-bold text-slate-900' : 'border-inherit opacity-70 hover:opacity-100'}`}
                 >
-                  <span className="text-xs font-bold text-amber-400">Sunset Gold</span>
-                  <span className="text-[10px] opacity-60">Warm Amber</span>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-3 h-3 rounded-full bg-slate-100 border border-slate-300" />
+                    <span className="text-xs">Minimal Porcelain</span>
+                  </div>
+                  <p className="text-[10px] opacity-50">Light Mode 1 (Pure White)</p>
                 </button>
 
+                {/* Light 2 */}
                 <button
                   type="button"
-                  onClick={() => changeTheme('emerald')}
-                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'emerald' ? 'border-emerald-400 bg-emerald-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                  onClick={() => changeTheme('nordic')}
+                  className={`p-3 rounded-lg border text-left transition ${theme === 'nordic' ? 'border-amber-700 bg-amber-50 font-bold text-stone-900' : 'border-inherit opacity-70 hover:opacity-100'}`}
                 >
-                  <span className="text-xs font-bold text-emerald-400">Midnight Emerald</span>
-                  <span className="text-[10px] opacity-60">Forest Teal</span>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-3 h-3 rounded-full bg-[#f4f0eb] border border-stone-300" />
+                    <span className="text-xs">Nordic Sand</span>
+                  </div>
+                  <p className="text-[10px] opacity-50">Light Mode 2 (Warm Cream)</p>
                 </button>
 
-                {/* Birthday Surprise Mode: Only visible/selectable by Admins */}
+                {/* Admin Only Birthday */}
                 {profile?.role === 'admin' && (
                   <button
                     type="button"
                     onClick={() => changeTheme('birthday')}
-                    className={`p-3 rounded-xl border flex flex-col items-start gap-1 col-span-2 transition ${theme === 'birthday' ? 'border-pink-400 bg-pink-500/20 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-slate-900/50'}`}
+                    className={`p-3 rounded-lg border text-left col-span-2 transition ${theme === 'birthday' ? 'border-pink-500 bg-pink-500/10 font-bold' : 'border-inherit opacity-70 hover:opacity-100'}`}
                   >
-                    <span className="text-xs font-bold text-pink-400 flex items-center gap-1">
-                      <Cake className="w-3.5 h-3.5" /> Birthday Party Mode (Admin Control) 🎉
-                    </span>
-                    <span className="text-[10px] opacity-60">Confetti, Party Glow & Celebratory Vibes</span>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Cake className="w-3.5 h-3.5 text-pink-400" />
+                      <span className="text-xs">Birthday Mode (Admin)</span>
+                    </div>
+                    <p className="text-[10px] opacity-50">Subtle celebration theme</p>
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold font-mono opacity-80">WhatsApp Number (For reminders, e.g. +919876543210)</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold font-mono opacity-75">WhatsApp Phone Number</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="+91..."
-                  className={`flex-1 rounded-xl px-3.5 py-2.5 text-sm outline-none ${curTheme.input}`}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                 />
-                <button onClick={savePhone} className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md">
-                  Save Phone
+                <button onClick={savePhone} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium">
+                  Save
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 rounded-2xl border border-white/10 bg-black/20">
-                <span className="text-xs font-semibold font-mono opacity-70">Total Points</span>
-                <p className="text-2xl font-black text-amber-400 mt-1">{profile?.points || 0} XP</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`p-3 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                <span className="text-xs font-mono opacity-60">Total Points</span>
+                <p className="text-xl font-bold mt-0.5">{profile?.points || 0} XP</p>
               </div>
-              <div className="p-5 rounded-2xl border border-white/10 bg-black/20">
-                <span className="text-xs font-semibold font-mono opacity-70">Role Status</span>
-                <p className={`text-lg font-bold ${curTheme.accent} mt-1 capitalize`}>{profile?.role || 'Student'}</p>
+              <div className={`p-3 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                <span className="text-xs font-mono opacity-60">Role</span>
+                <p className="text-xl font-bold mt-0.5 capitalize">{profile?.role || 'Student'}</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 6: ADMIN GOD MODE & SURPRISE THEME CONTROLS */}
+        {/* TAB 6: ADMIN CONTROL & INSPECTOR */}
         {activeTab === 'admin' && profile?.role === 'admin' && (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="p-5 rounded-2xl flex items-center justify-between border bg-red-500/10 border-red-500/30">
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-6 h-6 text-red-500 shrink-0" />
+          <div className="max-w-3xl mx-auto space-y-5">
+            <div className={`p-4 rounded-xl flex items-center justify-between border ${isLight ? 'bg-red-50 border-red-200 text-red-900' : 'bg-red-950/30 border-red-900/50 text-red-200'}`}>
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
                 <div>
-                  <h3 className="text-sm font-bold text-red-400">Admin Control & Inspection Suite</h3>
-                  <p className="text-xs opacity-75">Assign group moderators, surprise students with Birthday Theme, and inspect full records.</p>
+                  <h3 className="text-sm font-bold">Admin Center</h3>
+                  <p className="text-xs opacity-75">Inspect records, manage permissions, and post announcements.</p>
                 </div>
               </div>
             </div>
 
             {/* Broadcast Form */}
-            <form onSubmit={createBroadcastAnnouncement} className={`p-5 rounded-2xl ${curTheme.card} space-y-3`}>
-              <h4 className="text-xs font-mono uppercase text-indigo-400 font-bold flex items-center gap-1.5">
-                <Megaphone className="w-4 h-4" /> Broadcast Live Platform Alert
+            <form onSubmit={createBroadcastAnnouncement} className={`p-4 rounded-xl ${curTheme.card} space-y-2.5`}>
+              <h4 className="text-xs font-mono uppercase font-semibold opacity-75 flex items-center gap-1">
+                <Megaphone className="w-3.5 h-3.5" /> Broadcast Announcement
               </h4>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Announcement message..."
+                  placeholder="Platform message..."
                   value={newAnnouncement}
                   onChange={(e) => setNewAnnouncement(e.target.value)}
-                  className={`flex-1 rounded-xl px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
                 />
-                <button type="submit" className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md ${curTheme.btnPrimary}`}>
-                  Broadcast
+                <button type="submit" className={`px-4 py-1.5 rounded-lg text-xs font-medium ${curTheme.btnPrimary}`}>
+                  Post
                 </button>
               </div>
             </form>
 
-            {/* Registered Students */}
-            <div className="space-y-2.5">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider font-mono opacity-70">All Registered Students ({allUsers.length})</h4>
-              <div className="grid grid-cols-1 gap-2.5">
+            {/* Student Directory */}
+            <div className="space-y-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60">
+                Registered Students ({allUsers.length})
+              </h4>
+              <div className="grid grid-cols-1 gap-2">
                 {allUsers.map((student) => (
-                  <div key={student.id} className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${curTheme.card}`}>
+                  <div key={student.id} className={`p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${curTheme.card}`}>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold">{student.display_name}</p>
-                        {student.is_blocked && <span className="text-[10px] font-bold bg-red-600 text-white px-2 py-0.5 rounded">BLOCKED</span>}
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-white/10">
+                        <p className="text-sm font-semibold">{student.display_name}</p>
+                        {student.is_blocked && <span className="text-[9px] font-bold bg-red-600 text-white px-1.5 py-0.5 rounded">BLOCKED</span>}
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded uppercase border border-inherit">
                           {student.role}
                         </span>
                         {student.preferred_theme === 'birthday' && (
-                          <span className="text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            🎂 Birthday Mode
-                          </span>
+                          <span className="text-[10px] text-pink-500 font-medium">🎂 Birthday</span>
                         )}
                       </div>
-                      <p className="text-xs font-mono opacity-60 mt-0.5">{student.email} • {student.points} XP</p>
+                      <p className="text-xs opacity-60 font-mono">{student.email} • {student.points} XP</p>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         onClick={() => inspectFullStudentDetails(student)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm ${curTheme.btnPrimary}`}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium ${curTheme.btnPrimary}`}
                       >
-                        <Eye className="w-3.5 h-3.5" /> Inspect
+                        Inspect
                       </button>
 
                       <button
                         onClick={() => toggleBlockUser(student)}
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${student.is_blocked ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40' : 'bg-red-600/20 text-red-400 border-red-500/40'}`}
+                        className={`px-2 py-1 rounded-md text-xs border border-inherit ${student.is_blocked ? 'text-emerald-600' : 'text-red-500'}`}
                       >
                         {student.is_blocked ? 'Unblock' : 'Block'}
                       </button>
 
                       <button
                         onClick={() => deleteUserAccount(student.id)}
-                        className="p-1.5 opacity-60 hover:text-red-400 border border-white/10 rounded-xl"
-                        title="Purge user"
+                        className="p-1 opacity-50 hover:opacity-100 hover:text-red-500"
+                        title="Delete user"
                       >
                         <UserMinus className="w-4 h-4" />
                       </button>
 
                       <button
                         onClick={() => triggerWhatsAppReminder(student.phone || '', student.display_name)}
-                        className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1"
+                        className="px-2 py-1 bg-emerald-600/20 text-emerald-600 rounded-md text-xs font-medium border border-emerald-500/30 flex items-center gap-1"
                       >
-                        <PhoneCall className="w-3.5 h-3.5" /> Remind
+                        <PhoneCall className="w-3 h-3" /> Remind
                       </button>
                     </div>
                   </div>
@@ -1373,54 +1383,64 @@ export default function App() {
 
             {/* FULL STUDENT INSPECTOR SUITE */}
             {viewingStudent && (
-              <div className={`p-6 rounded-3xl space-y-6 border shadow-2xl ${curTheme.card}`}>
-                <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <div className={`p-4 sm:p-5 rounded-xl space-y-4 border ${curTheme.card}`}>
+                <div className="flex justify-between items-center border-b border-inherit pb-2.5">
                   <div>
-                    <h3 className={`text-base font-black ${curTheme.accent}`}>Student Profile: {viewingStudent.display_name}</h3>
-                    <p className="text-xs opacity-60">Email: {viewingStudent.email} | Phone: {viewingStudent.phone || 'N/A'}</p>
+                    <h3 className="text-sm font-bold">Profile: {viewingStudent.display_name}</h3>
+                    <p className="text-xs opacity-60">{viewingStudent.email} | Phone: {viewingStudent.phone || 'N/A'}</p>
                   </div>
-                  <button onClick={() => setViewingStudent(null)} className="text-xs border border-white/10 px-3 py-1.5 rounded-xl bg-white/5">
+                  <button onClick={() => setViewingStudent(null)} className="text-xs border border-inherit px-2 py-1 rounded-md">
                     Close
                   </button>
                 </div>
 
-                {/* SURPRISE THEME OVERRIDE FOR THIS STUDENT */}
-                <div className="p-4 rounded-2xl bg-black/20 border border-white/10 space-y-2">
-                  <label className="text-xs font-bold font-mono uppercase text-pink-400 flex items-center gap-1.5">
-                    <Cake className="w-4 h-4" /> Surprise Theme Override (Syncs to Student's Screen)
-                  </label>
-                  <div className="flex gap-2 flex-wrap">
+                {/* Surprise Theme Control */}
+                <div className={`p-3 rounded-lg border border-inherit space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <label className="text-xs font-mono font-semibold opacity-75">Assign Student Theme (Remote Override)</label>
+                  <div className="flex gap-1.5 flex-wrap">
                     <button
                       onClick={() => setStudentThemeSurprise(viewingStudent.id, 'birthday')}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-pink-500/20 text-pink-300 border border-pink-500/40 hover:bg-pink-500/30 flex items-center gap-1"
+                      className="px-2.5 py-1 rounded text-xs font-medium bg-pink-500/20 text-pink-500 border border-pink-500/30"
                     >
-                      🎉 Surprise Birthday Theme
+                      🎂 Surprise Birthday Theme
                     </button>
                     <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'cyber')}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 opacity-75 hover:opacity-100"
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'slate')}
+                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
                     >
-                      Reset to Cyber
+                      Deep Slate (Dark 1)
                     </button>
                     <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'light')}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 opacity-75 hover:opacity-100"
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'obsidian')}
+                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
                     >
-                      Reset to Light
+                      Obsidian (Dark 2)
+                    </button>
+                    <button
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'porcelain')}
+                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
+                    >
+                      Porcelain (Light 1)
+                    </button>
+                    <button
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'nordic')}
+                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
+                    >
+                      Nordic Sand (Light 2)
                     </button>
                   </div>
                 </div>
 
-                {/* Platform Role & Points Adjustment */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-black/20 border border-white/10">
+                {/* Role & XP Modification */}
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                   <div>
-                    <label className="text-xs font-bold opacity-80 block mb-1.5">Platform Access Role</label>
-                    <div className="flex gap-1.5">
+                    <label className="text-xs font-semibold opacity-75 block mb-1">Role</label>
+                    <div className="flex gap-1">
                       {(['student', 'admin'] as const).map((r) => (
                         <button
                           key={r}
                           onClick={() => changeUserPlatformRole(viewingStudent.id, r)}
-                          className={`flex-1 py-1.5 text-xs font-bold rounded-lg border capitalize transition ${viewingStudent.role === r ? curTheme.btnPrimary : 'border-white/10 opacity-60'}`}
+                          className={`flex-1 py-1 text-xs rounded border capitalize ${viewingStudent.role === r ? 'bg-slate-800 text-white font-bold' : 'border-inherit opacity-60'}`}
                         >
                           {r}
                         </button>
@@ -1429,78 +1449,65 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold opacity-80 block mb-1.5">Direct XP Adjustment</label>
-                    <div className="flex gap-2">
+                    <label className="text-xs font-semibold opacity-75 block mb-1">Set XP Points</label>
+                    <div className="flex gap-1">
                       <input
                         type="number"
                         value={editPointsValue}
                         onChange={(e) => setEditPointsValue(e.target.value)}
-                        className={`flex-1 rounded-lg px-3 py-1 text-xs outline-none ${curTheme.input}`}
+                        className={`flex-1 rounded px-2 py-1 text-xs outline-none ${curTheme.input}`}
                       />
                       <button
                         onClick={() => updateStudentPointsDirectly(viewingStudent.id)}
-                        className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold"
+                        className="px-2.5 py-1 bg-amber-600 text-white rounded text-xs font-medium"
                       >
-                        Set XP
+                        Save
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Scheduled Calendar Plans */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold font-mono uppercase text-indigo-400 flex items-center gap-1.5">
-                    <CalendarDays className="w-4 h-4" /> Scheduled Milestones ({studentEvents.length})
-                  </h4>
+                {/* Milestones */}
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-mono font-semibold opacity-75">Scheduled Milestones ({studentEvents.length})</h4>
                   {studentEvents.length === 0 ? (
-                    <p className="text-xs italic opacity-50">No calendar milestones scheduled.</p>
+                    <p className="text-xs italic opacity-40">No planned events.</p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {studentEvents.map((ev) => (
-                        <div key={ev.id} className="p-3 rounded-xl border border-white/10 text-xs bg-black/20">
-                          <div className="flex justify-between font-bold">
+                        <div key={ev.id} className={`p-2 rounded border border-inherit text-xs ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
+                          <div className="flex justify-between font-medium">
                             <span>{ev.title}</span>
-                            <span className={curTheme.accent}>{ev.tag}</span>
+                            <span className="opacity-60 font-mono">{ev.tag}</span>
                           </div>
-                          <p className="mt-1 font-mono opacity-60">{new Date(ev.start_time).toLocaleString()}</p>
+                          <p className="text-[10px] opacity-50 font-mono mt-0.5">{new Date(ev.start_time).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Focus Logs & Tasks */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold font-mono uppercase text-emerald-400 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" /> Study Logs & Focus History ({studentLogs.length} Days)
-                  </h4>
+                {/* History Logs */}
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-mono font-semibold opacity-75">Focus Logs ({studentLogs.length} Days)</h4>
                   {studentLogs.length === 0 ? (
-                    <p className="text-xs italic opacity-50">No study history recorded.</p>
+                    <p className="text-xs italic opacity-40">No history recorded.</p>
                   ) : (
-                    <div className="space-y-3 max-h-72 overflow-y-auto">
+                    <div className="space-y-2 max-h-56 overflow-y-auto">
                       {studentLogs.map((item, i) => (
-                        <div key={i} className="p-4 rounded-xl border border-white/10 text-xs space-y-2 bg-black/20">
-                          <div className="flex justify-between font-mono font-bold">
-                            <span>Date: {item.date}</span>
+                        <div key={i} className={`p-2.5 rounded border border-inherit text-xs space-y-1 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
+                          <div className="flex justify-between font-mono font-semibold">
+                            <span>{item.date}</span>
                             <span className={curTheme.accent}>{item.hours_studied} hrs</span>
                           </div>
-                          {item.blockers && (
-                            <p className="text-amber-400 italic bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                              Blocker: {item.blockers}
-                            </p>
-                          )}
-                          <div className="space-y-1">
-                            <span className="font-semibold opacity-70 block mb-1">Tasks:</span>
-                            {item.tasks && item.tasks.length > 0 ? (
-                              item.tasks.map((t: any) => (
-                                <div key={t.id} className="flex items-center gap-1.5">
-                                  <span>{t.is_completed ? '✅' : '⏳'}</span>
-                                  <span className={t.is_completed ? 'line-through opacity-50' : 'font-medium'}>{t.title} ({t.tier})</span>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="italic opacity-50">No tasks attached to this day.</p>
-                            )}
+                          {item.blockers && <p className="opacity-75 italic text-[11px]">Blocker: {item.blockers}</p>}
+                          <div className="space-y-0.5 pt-0.5">
+                            {item.tasks?.map((t: any) => (
+                              <div key={t.id} className="flex items-center gap-1 opacity-80 text-[11px]">
+                                <span>{t.is_completed ? '✓' : '•'}</span>
+                                <span className={t.is_completed ? 'line-through opacity-50' : ''}>{t.title}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       ))}
@@ -1514,12 +1521,12 @@ export default function App() {
       </main>
 
       {/* Floating Bottom Navigation Bar */}
-      <nav className={`fixed bottom-0 left-0 right-0 z-[100] backdrop-blur-2xl border-t px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl transition-colors duration-300 ${curTheme.nav}`}>
+      <nav className={`fixed bottom-0 left-0 right-0 z-[100] backdrop-blur-md border-t px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${curTheme.nav}`}>
         <div className="max-w-md mx-auto flex justify-around items-center">
           <button 
             type="button"
             onClick={() => setActiveTab('dashboard')} 
-            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'dashboard' ? `${curTheme.accent} font-bold scale-105` : 'opacity-60 hover:opacity-100'}`}
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'dashboard' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <LayoutDashboard className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Today</span>
@@ -1528,7 +1535,7 @@ export default function App() {
           <button 
             type="button"
             onClick={() => setActiveTab('calendar')} 
-            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'calendar' ? 'text-purple-400 font-bold scale-105' : 'opacity-60 hover:opacity-100'}`}
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'calendar' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <CalendarIcon className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Planner</span>
@@ -1537,7 +1544,7 @@ export default function App() {
           <button 
             type="button"
             onClick={() => setActiveTab('discussions')} 
-            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'discussions' ? 'text-pink-400 font-bold scale-105' : 'opacity-60 hover:opacity-100'}`}
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'discussions' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <MessageSquare className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Hub</span>
@@ -1546,7 +1553,7 @@ export default function App() {
           <button 
             type="button"
             onClick={() => setActiveTab('leaderboard')} 
-            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'leaderboard' ? 'text-amber-400 font-bold scale-105' : 'opacity-60 hover:opacity-100'}`}
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'leaderboard' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <Trophy className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Ranks</span>
@@ -1555,7 +1562,7 @@ export default function App() {
           <button 
             type="button"
             onClick={() => setActiveTab('profile')} 
-            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'profile' ? 'text-emerald-400 font-bold scale-105' : 'opacity-60 hover:opacity-100'}`}
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'profile' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <User className="w-5 h-5 mb-0.5" />
             <span className="text-[10px] leading-tight">Profile</span>
@@ -1565,7 +1572,7 @@ export default function App() {
             <button 
               type="button"
               onClick={() => setActiveTab('admin')} 
-              className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-xl transition-all ${activeTab === 'admin' ? 'text-red-500 font-bold scale-105' : 'opacity-60 hover:opacity-100'}`}
+              className={`flex flex-col items-center justify-center p-1.5 min-w-[48px] rounded-lg transition ${activeTab === 'admin' ? 'text-red-500 font-bold' : 'opacity-50 hover:opacity-100'}`}
             >
               <ShieldAlert className="w-5 h-5 mb-0.5" />
               <span className="text-[10px] leading-tight">Admin</span>
