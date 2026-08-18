@@ -8,12 +8,12 @@ import {
   LayoutDashboard, User, ShieldAlert, Flame, MessageSquare, 
   Send, Check, X, PhoneCall, Sparkles, Target, Award,
   CalendarCheck, Palette, Eye, CalendarDays, Ban, ShieldCheck,
-  Megaphone, UserMinus, Shield, Users
+  Megaphone, UserMinus, Shield, Cake, PartyPopper
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'discussions' | 'profile' | 'admin';
-type ThemeType = 'cyber' | 'light' | 'sunset' | 'emerald';
+type ThemeType = 'cyber' | 'light' | 'sunset' | 'emerald' | 'birthday';
 
 interface Task {
   id: string;
@@ -38,6 +38,7 @@ interface Profile {
   points: number;
   phone?: string;
   is_blocked?: boolean;
+  preferred_theme?: ThemeType;
 }
 
 interface DiscussionGroup {
@@ -128,11 +129,27 @@ export default function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
-  // Phone profile state
+  // Phone state
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // 1. Auto-recovery for stale chunks
+  useEffect(() => {
+    const handleChunkError = (event: ErrorEvent) => {
+      if (
+        event?.message?.includes('Loading chunk') ||
+        event?.message?.includes('Failed to fetch') ||
+        event?.message?.includes('Script error')
+      ) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('error', handleChunkError);
+    return () => window.removeEventListener('error', handleChunkError);
+  }, []);
+
+  // 2. Initialize and load user profile
   useEffect(() => {
     const savedTheme = localStorage.getItem('sq_theme') as ThemeType;
     if (savedTheme) setTheme(savedTheme);
@@ -164,17 +181,40 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const changeTheme = (newTheme: ThemeType) => {
-    setTheme(newTheme);
-    localStorage.setItem('sq_theme', newTheme);
-  };
-
   const fetchUserProfile = async (userId: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (data) {
       setProfile(data);
       setPhoneNumber(data.phone || '');
+      if (data.preferred_theme) {
+        setTheme(data.preferred_theme);
+        localStorage.setItem('sq_theme', data.preferred_theme);
+        if (data.preferred_theme === 'birthday') {
+          confetti({ particleCount: 120, spread: 100, origin: { y: 0.4 } });
+        }
+      }
     }
+  };
+
+  const changeTheme = async (newTheme: ThemeType) => {
+    setTheme(newTheme);
+    localStorage.setItem('sq_theme', newTheme);
+    if (profile) {
+      setProfile({ ...profile, preferred_theme: newTheme });
+      await supabase.from('profiles').update({ preferred_theme: newTheme }).eq('id', profile.id);
+    }
+    if (newTheme === 'birthday') {
+      confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+    }
+  };
+
+  const setStudentThemeSurprise = async (studentId: string, surpriseTheme: ThemeType) => {
+    await supabase.from('profiles').update({ preferred_theme: surpriseTheme }).eq('id', studentId);
+    setAllUsers(allUsers.map(u => u.id === studentId ? { ...u, preferred_theme: surpriseTheme } : u));
+    if (viewingStudent && viewingStudent.id === studentId) {
+      setViewingStudent({ ...viewingStudent, preferred_theme: surpriseTheme });
+    }
+    alert(`Surprise theme (${surpriseTheme.toUpperCase()}) applied to student!`);
   };
 
   const loadAnnouncements = async () => {
@@ -311,7 +351,7 @@ export default function App() {
     alert('WhatsApp number updated!');
   };
 
-  // Group & Specific Moderator Methods
+  // Group Methods
   const loadGroups = async () => {
     const { data: groupList } = await supabase.from('discussion_groups').select('*').order('created_at', { ascending: false });
     setGroups(groupList || []);
@@ -337,7 +377,6 @@ export default function App() {
       .single();
 
     if (!error && data) {
-      // Auto assign creator as moderator of this group
       await supabase.from('group_members').insert([{
         group_id: data.id,
         user_id: user.id,
@@ -366,7 +405,6 @@ export default function App() {
   const loadGroupMessagesAndMembers = async (group: DiscussionGroup) => {
     setActiveGroup(group);
     
-    // Messages
     const { data: msgData } = await supabase
       .from('group_messages')
       .select('*')
@@ -374,7 +412,6 @@ export default function App() {
       .order('created_at', { ascending: true });
     setGroupMessages(msgData || []);
 
-    // Load group members & pending requests for moderators/admins
     const { data: memData } = await supabase
       .from('group_members')
       .select('id, group_id, user_id, status, role, profiles(display_name, email)')
@@ -403,7 +440,6 @@ export default function App() {
     }
   };
 
-  // Moderator specific functions for THIS active group
   const updateGroupMemberStatus = async (membershipId: string, status: 'approved' | 'rejected') => {
     await supabase.from('group_members').update({ status }).eq('id', membershipId);
     setGroupMembersList(groupMembersList.map(m => m.id === membershipId ? { ...m, status } : m));
@@ -417,7 +453,7 @@ export default function App() {
     const nextRole = currentRole === 'moderator' ? 'member' : 'moderator';
     await supabase.from('group_members').update({ role: nextRole }).eq('id', membershipId);
     setGroupMembersList(groupMembersList.map(m => m.id === membershipId ? { ...m, role: nextRole } : m));
-    alert(`Member role updated to ${nextRole} for this group!`);
+    alert(`Role updated to ${nextRole}!`);
   };
 
   // Calendar Methods
@@ -459,7 +495,7 @@ export default function App() {
     await supabase.from('study_events').delete().eq('id', id);
   };
 
-  // Admin God-Mode Methods
+  // Admin Methods
   const loadAdminControlData = async () => {
     const { data: usersData } = await supabase.from('profiles').select('*').order('points', { ascending: false });
     setAllUsers(usersData || []);
@@ -552,7 +588,7 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Theme Styling Engine
+  // Theme Styling Configuration
   const themeStyles = {
     cyber: {
       bg: 'bg-gradient-to-br from-[#060814] via-[#090d20] to-[#0e071c] text-slate-100',
@@ -589,13 +625,20 @@ export default function App() {
       btnPrimary: 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white',
       accent: 'text-emerald-400',
       nav: 'bg-slate-950/95 border-emerald-950'
+    },
+    birthday: {
+      bg: 'bg-gradient-to-br from-[#24081e] via-[#1a082b] to-[#120624] text-pink-50',
+      header: 'bg-purple-950/80 border-pink-500/30',
+      card: 'bg-purple-950/40 backdrop-blur-xl border border-pink-500/30 shadow-[0_0_25px_rgba(236,72,153,0.15)]',
+      input: 'bg-slate-950/90 border border-pink-500/40 text-pink-100 placeholder-pink-300/40 focus:border-pink-400',
+      btnPrimary: 'bg-gradient-to-r from-pink-500 via-purple-500 to-amber-400 hover:opacity-90 text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]',
+      accent: 'text-pink-400',
+      nav: 'bg-purple-950/95 border-pink-500/30'
     }
   };
 
   const curTheme = themeStyles[theme];
-  const isLight = theme === 'light';
 
-  // Permission Checks for Active Discussion Room
   const isGlobalAdmin = profile?.role === 'admin';
   const isGroupModerator = activeGroup && (
     isGlobalAdmin || myMemberships[activeGroup.id]?.role === 'moderator'
@@ -675,7 +718,8 @@ export default function App() {
       <header className={`sticky top-0 z-50 backdrop-blur-xl border-b px-4 py-3 ${curTheme.header}`}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 text-lg">
+            <span className="font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 text-lg flex items-center gap-1.5">
+              {theme === 'birthday' && <Cake className="w-5 h-5 text-pink-400 animate-bounce" />}
               STUDYQUEST
             </span>
             <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs font-bold">
@@ -684,22 +728,12 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Theme Selector Palette */}
-            <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/10">
-              <button onClick={() => changeTheme('cyber')} className={`w-5 h-5 rounded-lg bg-cyan-500 ${theme === 'cyber' ? 'ring-2 ring-white' : 'opacity-60'}`} title="Cyber Dark" />
-              <button onClick={() => changeTheme('light')} className={`w-5 h-5 rounded-lg bg-slate-200 ${theme === 'light' ? 'ring-2 ring-indigo-500' : 'opacity-60'}`} title="Crisp Light" />
-              <button onClick={() => changeTheme('sunset')} className={`w-5 h-5 rounded-lg bg-amber-600 ${theme === 'sunset' ? 'ring-2 ring-white' : 'opacity-60'}`} title="Sunset Gold" />
-              <button onClick={() => changeTheme('emerald')} className={`w-5 h-5 rounded-lg bg-emerald-500 ${theme === 'emerald' ? 'ring-2 ring-white' : 'opacity-60'}`} title="Midnight Emerald" />
-            </div>
-
-            <button 
-              onClick={handleSignOut} 
-              className="text-xs p-2 rounded-xl border border-white/10 hover:text-red-400 transition"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <button 
+            onClick={handleSignOut} 
+            className="text-xs p-2 rounded-xl border border-white/10 hover:text-red-400 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -708,6 +742,14 @@ export default function App() {
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-md">
           <Megaphone className="w-4 h-4 animate-bounce shrink-0" />
           <span>{announcements[0].message}</span>
+        </div>
+      )}
+
+      {/* Birthday Banner if in Birthday Theme */}
+      {theme === 'birthday' && (
+        <div className="bg-gradient-to-r from-pink-600 via-purple-600 to-amber-500 text-white px-4 py-2 text-xs font-black text-center flex items-center justify-center gap-2 shadow-lg">
+          <PartyPopper className="w-4 h-4 animate-spin" />
+          🎉 HAPPY BIRTHDAY! Wishing you massive milestones and study breakthroughs this year! 🎂
         </div>
       )}
 
@@ -944,7 +986,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: DISCUSSION GROUPS (WITH SPECIFIC GROUP MODERATORS) */}
+        {/* TAB 3: DISCUSSION GROUPS */}
         {activeTab === 'discussions' && (
           <div className="max-w-3xl mx-auto space-y-6">
             {!activeGroup ? (
@@ -1020,7 +1062,6 @@ export default function App() {
               </div>
             ) : (
               <div className={`rounded-2xl flex flex-col h-[650px] shadow-2xl overflow-hidden border ${curTheme.card}`}>
-                {/* Room Top Header */}
                 <div className="p-4 border-b border-white/10 bg-black/20 flex justify-between items-center">
                   <div>
                     <h3 className="font-bold flex items-center gap-2">
@@ -1034,7 +1075,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Specific Group Moderator Panel */}
                 {isGroupModerator && (
                   <div className="bg-purple-950/20 border-b border-purple-500/20 p-3 text-xs space-y-2">
                     <span className="font-bold font-mono text-purple-400 uppercase flex items-center gap-1">
@@ -1071,7 +1111,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Chat Messages */}
                 <div className="flex-1 p-4 overflow-y-auto space-y-3">
                   {groupMessages.length === 0 ? (
                     <p className="text-center text-xs italic my-auto opacity-50">No questions yet. Ask your question below!</p>
@@ -1088,7 +1127,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Message Input */}
                 <form onSubmit={postGroupMessage} className="p-3 border-t border-white/10 bg-black/20 flex gap-2">
                   <input
                     type="text"
@@ -1145,7 +1183,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PROFILE */}
+        {/* TAB 5: PROFILE WITH EMBEDDED THEME CONTROLS */}
         {activeTab === 'profile' && (
           <div className={`max-w-2xl mx-auto p-6 sm:p-8 rounded-3xl space-y-6 ${curTheme.card}`}>
             <div className="flex items-center gap-5">
@@ -1155,6 +1193,64 @@ export default function App() {
               <div>
                 <h2 className="text-xl font-black">{profile?.display_name}</h2>
                 <p className="text-xs opacity-70">{profile?.email}</p>
+              </div>
+            </div>
+
+            {/* THEME SELECTION SECTION */}
+            <div className="space-y-3 p-4 rounded-2xl border border-white/10 bg-black/20">
+              <label className="text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2">
+                <Palette className="w-4 h-4 text-purple-400" /> Custom App Theme & Style
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => changeTheme('cyber')}
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'cyber' ? 'border-cyan-400 bg-cyan-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                >
+                  <span className="text-xs font-bold text-cyan-400">Cyber Dark</span>
+                  <span className="text-[10px] opacity-60">Neon & Slate</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeTheme('light')}
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'light' ? 'border-indigo-500 bg-indigo-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                >
+                  <span className="text-xs font-bold text-indigo-400">Crisp Light</span>
+                  <span className="text-[10px] opacity-60">Clean White</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeTheme('sunset')}
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'sunset' ? 'border-amber-400 bg-amber-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                >
+                  <span className="text-xs font-bold text-amber-400">Sunset Gold</span>
+                  <span className="text-[10px] opacity-60">Warm Amber</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => changeTheme('emerald')}
+                  className={`p-3 rounded-xl border flex flex-col items-start gap-1 transition ${theme === 'emerald' ? 'border-emerald-400 bg-emerald-500/20' : 'border-white/10 bg-slate-900/50'}`}
+                >
+                  <span className="text-xs font-bold text-emerald-400">Midnight Emerald</span>
+                  <span className="text-[10px] opacity-60">Forest Teal</span>
+                </button>
+
+                {/* Birthday Surprise Mode: Only visible/selectable by Admins */}
+                {profile?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => changeTheme('birthday')}
+                    className={`p-3 rounded-xl border flex flex-col items-start gap-1 col-span-2 transition ${theme === 'birthday' ? 'border-pink-400 bg-pink-500/20 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-slate-900/50'}`}
+                  >
+                    <span className="text-xs font-bold text-pink-400 flex items-center gap-1">
+                      <Cake className="w-3.5 h-3.5" /> Birthday Party Mode (Admin Control) 🎉
+                    </span>
+                    <span className="text-[10px] opacity-60">Confetti, Party Glow & Celebratory Vibes</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1187,7 +1283,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: ADMIN GOD MODE & FULL INSPECTION */}
+        {/* TAB 6: ADMIN GOD MODE & SURPRISE THEME CONTROLS */}
         {activeTab === 'admin' && profile?.role === 'admin' && (
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="p-5 rounded-2xl flex items-center justify-between border bg-red-500/10 border-red-500/30">
@@ -1195,7 +1291,7 @@ export default function App() {
                 <ShieldAlert className="w-6 h-6 text-red-500 shrink-0" />
                 <div>
                   <h3 className="text-sm font-bold text-red-400">Admin Control & Inspection Suite</h3>
-                  <p className="text-xs opacity-75">Assign group moderators, broadcast alerts, manage XP, and inspect full records.</p>
+                  <p className="text-xs opacity-75">Assign group moderators, surprise students with Birthday Theme, and inspect full records.</p>
                 </div>
               </div>
             </div>
@@ -1232,6 +1328,11 @@ export default function App() {
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-white/10">
                           {student.role}
                         </span>
+                        {student.preferred_theme === 'birthday' && (
+                          <span className="text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            🎂 Birthday Mode
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs font-mono opacity-60 mt-0.5">{student.email} • {student.points} XP</p>
                     </div>
@@ -1281,6 +1382,33 @@ export default function App() {
                   <button onClick={() => setViewingStudent(null)} className="text-xs border border-white/10 px-3 py-1.5 rounded-xl bg-white/5">
                     Close
                   </button>
+                </div>
+
+                {/* SURPRISE THEME OVERRIDE FOR THIS STUDENT */}
+                <div className="p-4 rounded-2xl bg-black/20 border border-white/10 space-y-2">
+                  <label className="text-xs font-bold font-mono uppercase text-pink-400 flex items-center gap-1.5">
+                    <Cake className="w-4 h-4" /> Surprise Theme Override (Syncs to Student's Screen)
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'birthday')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-pink-500/20 text-pink-300 border border-pink-500/40 hover:bg-pink-500/30 flex items-center gap-1"
+                    >
+                      🎉 Surprise Birthday Theme
+                    </button>
+                    <button
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'cyber')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 opacity-75 hover:opacity-100"
+                    >
+                      Reset to Cyber
+                    </button>
+                    <button
+                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'light')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 opacity-75 hover:opacity-100"
+                    >
+                      Reset to Light
+                    </button>
+                  </div>
                 </div>
 
                 {/* Platform Role & Points Adjustment */}
