@@ -6,7 +6,7 @@ import {
   CheckCircle2, Circle, Plus, Trash2, BookOpen, Code2, RotateCcw, 
   Clock, AlertCircle, LogOut, Trophy, Calendar as CalendarIcon, 
   LayoutDashboard, User, ShieldAlert, Flame, MessageSquare, 
-  Users, Send, Check, X, PhoneCall, ExternalLink
+  Users, Send, Check, X, PhoneCall
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -41,20 +41,20 @@ interface DiscussionGroup {
   created_by: string;
 }
 
-interface GroupMember {
-  id: string;
-  group_id: string;
-  user_id: string;
-  status: 'pending' | 'approved' | 'rejected';
-  profiles?: Profile;
-}
-
 interface GroupMessage {
   id: string;
   group_id: string;
   sender_name: string;
   message: string;
   created_at: string;
+}
+
+interface StudyEvent {
+  id: string;
+  title: string;
+  start_time: string;
+  tag: string;
+  is_completed: boolean;
 }
 
 export default function App() {
@@ -76,6 +76,12 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTier, setNewTaskTier] = useState<'LEARN' | 'APPLY' | 'REVIEW'>('LEARN');
 
+  // Calendar State
+  const [events, setEvents] = useState<StudyEvent[]>([]);
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventDate, setNewEventDate] = useState('');
+  const [newEventTag, setNewEventTag] = useState('General');
+
   // Social & Admin State
   const [leaderboard, setLeaderboard] = useState<Profile[]>([]);
   const [allUsers, setAllUsers] = useState<Profile[]>([]);
@@ -92,7 +98,7 @@ export default function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
-  // Phone update state
+  // Phone profile state
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -168,7 +174,7 @@ export default function App() {
     if (authMode === 'signup') {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) alert(error.message);
-      else alert('Account registered! Please sign in.');
+      else alert('Account registered successfully! Please sign in.');
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) alert(error.message);
@@ -179,6 +185,7 @@ export default function App() {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setTasks([]);
   };
 
   const addPoints = async (pointsToAdd: number) => {
@@ -236,7 +243,7 @@ export default function App() {
       .eq('id', log.id);
 
     await addPoints(Math.round(parsedHours * 20));
-    alert('Log & Points Saved!');
+    alert('Progress & XP saved!');
   };
 
   const savePhone = async () => {
@@ -245,7 +252,7 @@ export default function App() {
     alert('Phone updated for WhatsApp reminders!');
   };
 
-  // Group & Discussion System
+  // Group Discussion Methods
   const loadGroups = async () => {
     const { data: groupList } = await supabase.from('discussion_groups').select('*').order('created_at', { ascending: false });
     setGroups(groupList || []);
@@ -285,7 +292,7 @@ export default function App() {
 
     if (!error) {
       setMyMemberships({ ...myMemberships, [groupId]: 'pending' });
-      alert('Join request submitted to Admin!');
+      alert('Join request sent to Admin for approval!');
     }
   };
 
@@ -320,7 +327,41 @@ export default function App() {
     }
   };
 
-  // Admin Analytics & Request Control
+  // Calendar Methods
+  const loadEvents = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('study_events')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('start_time', { ascending: true });
+    setEvents(data || []);
+  };
+
+  const addEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEventTitle || !newEventDate || !user) return;
+
+    const { data, error } = await supabase
+      .from('study_events')
+      .insert([{
+        user_id: user.id,
+        title: newEventTitle,
+        start_time: new Date(newEventDate).toISOString(),
+        end_time: new Date(newEventDate).toISOString(),
+        tag: newEventTag,
+      }])
+      .select()
+      .single();
+
+    if (!error && data) {
+      setEvents([...events, data]);
+      setNewEventTitle('');
+      setNewEventDate('');
+    }
+  };
+
+  // Admin Methods
   const loadAdminControlData = async () => {
     const { data: usersData } = await supabase.from('profiles').select('*').order('points', { ascending: false });
     setAllUsers(usersData || []);
@@ -350,7 +391,7 @@ export default function App() {
 
   const triggerWhatsAppReminder = (studentPhone: string, studentName: string) => {
     if (!studentPhone) {
-      alert('Student has not configured their phone number yet.');
+      alert('Student has not configured their phone number in their Profile yet.');
       return;
     }
     const cleanPhone = studentPhone.replace(/[^0-9]/g, '');
@@ -360,6 +401,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === 'discussions') loadGroups();
+    if (activeTab === 'calendar') loadEvents();
     if (activeTab === 'admin' && profile?.role === 'admin') loadAdminControlData();
     if (activeTab === 'leaderboard') {
       supabase.from('profiles').select('*').order('points', { ascending: false }).limit(50).then(({ data }) => setLeaderboard(data || []));
@@ -367,7 +409,7 @@ export default function App() {
   }, [activeTab]);
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center text-cyan-400 font-mono">Loading StudyQuest...</div>;
+    return <div className="flex h-screen items-center justify-center text-cyan-400 font-mono">Initializing StudyQuest...</div>;
   }
 
   if (!user) {
@@ -420,9 +462,9 @@ export default function App() {
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/70 border-b border-slate-800/80 px-4 py-3">
+    <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col">
+      {/* Top Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/80 border-b border-slate-800/80 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 text-lg">
@@ -439,8 +481,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto p-4 sm:p-6">
+      {/* Main Content Area */}
+      <main className="max-w-4xl w-full mx-auto p-4 sm:p-6 pb-36 flex-1">
         {/* TODAY'S DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 max-w-2xl mx-auto">
@@ -474,7 +516,7 @@ export default function App() {
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
                 />
-                <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0">
+                <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 shadow-lg shadow-cyan-600/20">
                   <Plus className="w-4 h-4" /> Add
                 </button>
               </div>
@@ -542,6 +584,63 @@ export default function App() {
                 Save & Claim XP
               </button>
             </section>
+          </div>
+        )}
+
+        {/* CALENDAR & PLANNER */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 rounded-xl">
+              <h2 className="text-sm font-bold text-slate-100 mb-4">Schedule Future Study Session</h2>
+              <form onSubmit={addEvent} className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Session Goal (e.g. Deep Learning Module 4 Exam Prep)"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="datetime-local"
+                    value={newEventDate}
+                    onChange={(e) => setNewEventDate(e.target.value)}
+                    className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                  />
+                  <select
+                    value={newEventTag}
+                    onChange={(e) => setNewEventTag(e.target.value)}
+                    className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                  >
+                    <option>General</option>
+                    <option>Exam</option>
+                    <option>Assignment</option>
+                    <option>Project</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition shadow-lg shadow-cyan-600/20"
+                >
+                  Add to Calendar
+                </button>
+              </form>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">Upcoming Milestones</h3>
+              {events.map((ev) => (
+                <div key={ev.id} className="bg-slate-900/40 border border-slate-800 p-3 rounded-lg flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-200">{ev.title}</h4>
+                    <p className="text-xs text-slate-400">{new Date(ev.start_time).toLocaleString()}</p>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                    {ev.tag}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -653,7 +752,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LEADERBOARD TAB */}
+        {/* LEADERBOARD */}
         {activeTab === 'leaderboard' && (
           <div className="max-w-2xl mx-auto space-y-4">
             <div className="bg-gradient-to-r from-amber-500/10 via-cyan-500/10 to-blue-500/10 border border-cyan-500/20 p-6 rounded-2xl text-center">
@@ -688,7 +787,7 @@ export default function App() {
           </div>
         )}
 
-        {/* PROFILE TAB */}
+        {/* PROFILE */}
         {activeTab === 'profile' && (
           <div className="max-w-2xl mx-auto bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl space-y-6">
             <div className="flex items-center gap-4">
@@ -769,7 +868,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Students List & WhatsApp trigger */}
+            {/* Students List */}
             <div className="space-y-2">
               <h4 className="text-xs font-mono uppercase text-slate-400">All Registered Students & Analytics ({allUsers.length})</h4>
               <div className="grid grid-cols-1 gap-2">
@@ -798,7 +897,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Student Analytics Modal/Section */}
+            {/* Student Analytics Log Modal */}
             {viewingStudent && (
               <div className="bg-slate-900 border border-cyan-500/40 p-4 rounded-xl space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-2">
@@ -834,29 +933,62 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Sticky Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 py-2 px-4">
+      {/* Bottom Sticky Mobile Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div className="max-w-md mx-auto flex justify-around items-center">
-          <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-cyan-400' : 'text-slate-400'}`}>
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Today</span>
+          <button 
+            type="button"
+            onClick={() => setActiveTab('dashboard')} 
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'dashboard' ? 'text-cyan-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <LayoutDashboard className="w-5 h-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Today</span>
           </button>
-          <button onClick={() => setActiveTab('discussions')} className={`flex flex-col items-center gap-1 ${activeTab === 'discussions' ? 'text-cyan-400' : 'text-slate-400'}`}>
-            <MessageSquare className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Groups</span>
+
+          <button 
+            type="button"
+            onClick={() => setActiveTab('calendar')} 
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'calendar' ? 'text-cyan-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <CalendarIcon className="w-5 h-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Calendar</span>
           </button>
-          <button onClick={() => setActiveTab('leaderboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'leaderboard' ? 'text-cyan-400' : 'text-slate-400'}`}>
-            <Trophy className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Rankings</span>
+          
+          <button 
+            type="button"
+            onClick={() => setActiveTab('discussions')} 
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'discussions' ? 'text-cyan-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <MessageSquare className="w-5 h-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Groups</span>
           </button>
-          <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-cyan-400' : 'text-slate-400'}`}>
-            <User className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Profile</span>
+          
+          <button 
+            type="button"
+            onClick={() => setActiveTab('leaderboard')} 
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'leaderboard' ? 'text-cyan-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <Trophy className="w-5 h-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Rankings</span>
           </button>
+          
+          <button 
+            type="button"
+            onClick={() => setActiveTab('profile')} 
+            className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'profile' ? 'text-cyan-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            <User className="w-5 h-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Profile</span>
+          </button>
+          
           {profile?.role === 'admin' && (
-            <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 ${activeTab === 'admin' ? 'text-red-400' : 'text-slate-400'}`}>
-              <ShieldAlert className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Admin</span>
+            <button 
+              type="button"
+              onClick={() => setActiveTab('admin')} 
+              className={`flex flex-col items-center justify-center p-1.5 min-w-[50px] transition-colors ${activeTab === 'admin' ? 'text-red-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <ShieldAlert className="w-5 h-5 mb-0.5" />
+              <span className="text-[11px] leading-tight">Admin</span>
             </button>
           )}
         </div>
