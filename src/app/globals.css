@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,15 +11,7 @@
   box-sizing: border-box;
 }
 
-/* Lock document boundaries to eliminate over-scroll bleed */
-html {
-  max-width: 100vw;
-  overflow-x: hidden;
-  margin: 0;
-  padding: 0;
-  height: 100%;
-}
-
+html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
@@ -28,7 +22,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Clean minimal scrollbars for feed panels */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
