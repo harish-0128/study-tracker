@@ -5,11 +5,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   CheckCircle2, Circle, Plus, Trash2, BookOpen, Code2, RotateCcw, 
   Clock, AlertCircle, LogOut, Trophy, Calendar as CalendarIcon, 
-  LayoutDashboard, User, ShieldAlert, Flame
+  LayoutDashboard, User, ShieldAlert, Flame, MessageSquare, 
+  Users, Send, Check, X, PhoneCall, ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'profile' | 'admin';
+type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'discussions' | 'profile' | 'admin';
 
 interface Task {
   id: string;
@@ -30,15 +31,30 @@ interface Profile {
   display_name: string;
   role: 'admin' | 'student';
   points: number;
-  current_streak: number;
+  phone?: string;
 }
 
-interface StudyEvent {
+interface DiscussionGroup {
   id: string;
   title: string;
-  start_time: string;
-  tag: string;
-  is_completed: boolean;
+  description: string;
+  created_by: string;
+}
+
+interface GroupMember {
+  id: string;
+  group_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  profiles?: Profile;
+}
+
+interface GroupMessage {
+  id: string;
+  group_id: string;
+  sender_name: string;
+  message: string;
+  created_at: string;
 }
 
 export default function App() {
@@ -63,10 +79,21 @@ export default function App() {
   // Social & Admin State
   const [leaderboard, setLeaderboard] = useState<Profile[]>([]);
   const [allUsers, setAllUsers] = useState<Profile[]>([]);
-  const [events, setEvents] = useState<StudyEvent[]>([]);
-  const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventDate, setNewEventDate] = useState('');
-  const [newEventTag, setNewEventTag] = useState('General');
+  const [selectedStudentLogs, setSelectedStudentLogs] = useState<any[]>([]);
+  const [viewingStudent, setViewingStudent] = useState<Profile | null>(null);
+
+  // Discussion Groups State
+  const [groups, setGroups] = useState<DiscussionGroup[]>([]);
+  const [activeGroup, setActiveGroup] = useState<DiscussionGroup | null>(null);
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [myMemberships, setMyMemberships] = useState<Record<string, string>>({});
+  const [adminRequests, setAdminRequests] = useState<any[]>([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDesc, setNewGroupDesc] = useState('');
+
+  // Phone update state
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -97,13 +124,11 @@ export default function App() {
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (data) setProfile(data);
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (data) {
+      setProfile(data);
+      setPhoneNumber(data.phone || '');
+    }
   };
 
   const loadDailyData = async (userId: string) => {
@@ -143,7 +168,7 @@ export default function App() {
     if (authMode === 'signup') {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) alert(error.message);
-      else alert('Account created! Please sign in.');
+      else alert('Account registered! Please sign in.');
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) alert(error.message);
@@ -154,7 +179,6 @@ export default function App() {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
-    setTasks([]);
   };
 
   const addPoints = async (pointsToAdd: number) => {
@@ -212,77 +236,151 @@ export default function App() {
       .eq('id', log.id);
 
     await addPoints(Math.round(parsedHours * 20));
-    alert('Log and XP updated!');
+    alert('Log & Points Saved!');
   };
 
-  const loadLeaderboard = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('points', { ascending: false })
-      .limit(50);
-    setLeaderboard(data || []);
+  const savePhone = async () => {
+    if (!profile) return;
+    await supabase.from('profiles').update({ phone: phoneNumber }).eq('id', profile.id);
+    alert('Phone updated for WhatsApp reminders!');
   };
 
-  const loadEvents = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('study_events')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('start_time', { ascending: true });
-    setEvents(data || []);
+  // Group & Discussion System
+  const loadGroups = async () => {
+    const { data: groupList } = await supabase.from('discussion_groups').select('*').order('created_at', { ascending: false });
+    setGroups(groupList || []);
+
+    if (user) {
+      const { data: memberList } = await supabase.from('group_members').select('*').eq('user_id', user.id);
+      const memMap: Record<string, string> = {};
+      memberList?.forEach((m: any) => {
+        memMap[m.group_id] = m.status;
+      });
+      setMyMemberships(memMap);
+    }
   };
 
-  const addEvent = async (e: React.FormEvent) => {
+  const createGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEventTitle || !newEventDate || !user) return;
+    if (!newGroupName.trim() || !user) return;
 
     const { data, error } = await supabase
-      .from('study_events')
+      .from('discussion_groups')
+      .insert([{ title: newGroupName.trim(), description: newGroupDesc.trim(), created_by: user.id }])
+      .select()
+      .single();
+
+    if (!error && data) {
+      setGroups([data, ...groups]);
+      setNewGroupName('');
+      setNewGroupDesc('');
+    }
+  };
+
+  const requestToJoinGroup = async (groupId: string) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('group_members')
+      .insert([{ group_id: groupId, user_id: user.id, status: 'pending' }]);
+
+    if (!error) {
+      setMyMemberships({ ...myMemberships, [groupId]: 'pending' });
+      alert('Join request submitted to Admin!');
+    }
+  };
+
+  const loadGroupMessages = async (group: DiscussionGroup) => {
+    setActiveGroup(group);
+    const { data } = await supabase
+      .from('group_messages')
+      .select('*')
+      .eq('group_id', group.id)
+      .order('created_at', { ascending: true });
+    setGroupMessages(data || []);
+  };
+
+  const postGroupMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeGroup || !user) return;
+
+    const { data, error } = await supabase
+      .from('group_messages')
       .insert([{
+        group_id: activeGroup.id,
         user_id: user.id,
-        title: newEventTitle,
-        start_time: new Date(newEventDate).toISOString(),
-        end_time: new Date(newEventDate).toISOString(),
-        tag: newEventTag,
+        sender_name: profile?.display_name || 'Scholar',
+        message: newMessage.trim(),
       }])
       .select()
       .single();
 
     if (!error && data) {
-      setEvents([...events, data]);
-      setNewEventTitle('');
-      setNewEventDate('');
+      setGroupMessages([...groupMessages, data]);
+      setNewMessage('');
     }
   };
 
-  const loadAdminData = async () => {
-    const { data } = await supabase.from('profiles').select('*');
-    setAllUsers(data || []);
+  // Admin Analytics & Request Control
+  const loadAdminControlData = async () => {
+    const { data: usersData } = await supabase.from('profiles').select('*').order('points', { ascending: false });
+    setAllUsers(usersData || []);
+
+    const { data: reqs } = await supabase
+      .from('group_members')
+      .select('id, group_id, user_id, status, profiles:user_id(display_name, email), discussion_groups:group_id(title)')
+      .eq('status', 'pending');
+    setAdminRequests(reqs || []);
+  };
+
+  const updateMemberStatus = async (requestId: string, newStatus: 'approved' | 'rejected') => {
+    await supabase.from('group_members').update({ status: newStatus }).eq('id', requestId);
+    setAdminRequests(adminRequests.filter(r => r.id !== requestId));
+  };
+
+  const inspectStudent = async (student: Profile) => {
+    setViewingStudent(student);
+    const { data } = await supabase
+      .from('daily_logs')
+      .select('date, hours_studied, blockers, tasks(*)')
+      .eq('user_id', student.id)
+      .order('date', { ascending: false })
+      .limit(7);
+    setSelectedStudentLogs(data || []);
+  };
+
+  const triggerWhatsAppReminder = (studentPhone: string, studentName: string) => {
+    if (!studentPhone) {
+      alert('Student has not configured their phone number yet.');
+      return;
+    }
+    const cleanPhone = studentPhone.replace(/[^0-9]/g, '');
+    const message = encodeURIComponent(`Hi ${studentName}! Friendly reminder from StudyQuest: Don't forget to complete your daily study tasks and log your study hours tonight! 🚀`);
+    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
   useEffect(() => {
-    if (activeTab === 'leaderboard') loadLeaderboard();
-    if (activeTab === 'calendar') loadEvents();
-    if (activeTab === 'admin' && profile?.role === 'admin') loadAdminData();
+    if (activeTab === 'discussions') loadGroups();
+    if (activeTab === 'admin' && profile?.role === 'admin') loadAdminControlData();
+    if (activeTab === 'leaderboard') {
+      supabase.from('profiles').select('*').order('points', { ascending: false }).limit(50).then(({ data }) => setLeaderboard(data || []));
+    }
   }, [activeTab]);
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center text-cyan-400 font-mono">Initializing System...</div>;
+    return <div className="flex h-screen items-center justify-center text-cyan-400 font-mono">Loading StudyQuest...</div>;
   }
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4 bg-slate-950">
-        <div className="w-full max-w-sm rounded-2xl bg-slate-900/80 backdrop-blur-xl p-8 shadow-2xl border border-slate-800">
+      <div className="flex min-h-screen items-center justify-center p-4 bg-[#07090e]">
+        <div className="w-full max-w-sm rounded-2xl bg-slate-900/80 backdrop-blur-xl p-8 border border-slate-800 shadow-2xl">
           <div className="flex justify-center mb-4">
             <div className="p-3 bg-cyan-500/10 rounded-xl border border-cyan-500/30">
               <Trophy className="w-8 h-8 text-cyan-400" />
             </div>
           </div>
-          <h1 className="text-xl font-bold text-center text-slate-100 tracking-tight">StudyQuest</h1>
-          <p className="text-xs text-center text-slate-400 mb-6">Gamified Daily Planner & Cross-Device Sync</p>
+          <h1 className="text-xl font-bold text-center text-slate-100">StudyQuest</h1>
+          <p className="text-xs text-center text-slate-400 mb-6">Social Study Tracker & Discussion Hub</p>
           <form onSubmit={handleAuth} className="space-y-4">
             <input
               type="email"
@@ -304,14 +402,14 @@ export default function App() {
               type="submit"
               className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg text-sm transition shadow-lg shadow-cyan-500/20"
             >
-              {authMode === 'login' ? 'Enter Academy' : 'Create Account'}
+              {authMode === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
           <button
             onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
             className="w-full text-center text-xs text-slate-400 mt-4 hover:text-cyan-400 transition"
           >
-            {authMode === 'login' ? "New student? Sign up" : "Existing account? Sign in"}
+            {authMode === 'login' ? "New student? Sign up" : "Existing student? Sign in"}
           </button>
         </div>
       </div>
@@ -322,8 +420,8 @@ export default function App() {
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 pb-20">
-      {/* Top Navbar */}
+    <div className="min-h-screen bg-[#07090e] text-slate-100 pb-24">
+      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/70 border-b border-slate-800/80 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -335,18 +433,15 @@ export default function App() {
               <span>{profile?.points || 0} XP</span>
             </div>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="text-xs text-slate-400 hover:text-red-400 p-2 rounded-lg transition flex items-center gap-1"
-          >
+          <button onClick={handleSignOut} className="text-xs text-slate-400 hover:text-red-400 p-2 rounded-lg transition">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* Main Container */}
+      {/* Main Content */}
       <main className="max-w-4xl mx-auto p-4 sm:p-6">
-        {/* DASHBOARD TAB */}
+        {/* TODAY'S DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 max-w-2xl mx-auto">
             <div className="grid grid-cols-2 gap-4">
@@ -366,10 +461,7 @@ export default function App() {
                 <span className="font-semibold text-cyan-400">{progress}%</span>
               </div>
               <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-                <div
-                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
+                <div className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
             </section>
 
@@ -382,10 +474,7 @@ export default function App() {
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
                 />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 shadow-lg shadow-cyan-600/20"
-                >
+                <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0">
                   <Plus className="w-4 h-4" /> Add
                 </button>
               </div>
@@ -395,10 +484,8 @@ export default function App() {
                     key={tier}
                     type="button"
                     onClick={() => setNewTaskTier(tier)}
-                    className={`flex-1 py-1.5 text-xs rounded-md border font-medium transition flex items-center justify-center gap-1.5 ${
-                      newTaskTier === tier
-                        ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                    className={`flex-1 py-1.5 text-xs rounded-md border font-medium transition ${
+                      newTaskTier === tier ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}
                   >
                     {tier}
@@ -410,36 +497,15 @@ export default function App() {
             <div className="space-y-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">Today's Roadmap</h2>
               {tasks.length === 0 ? (
-                <p className="text-sm text-slate-500 italic bg-slate-900/20 p-4 rounded-lg border border-slate-800/60 text-center">
-                  No objectives added yet.
-                </p>
+                <p className="text-sm text-slate-500 italic bg-slate-900/20 p-4 rounded-lg border border-slate-800/60 text-center">No objectives added yet.</p>
               ) : (
                 tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition ${
-                      task.is_completed
-                        ? 'bg-slate-950/40 border-slate-800/40 text-slate-500'
-                        : 'bg-slate-900/50 border-slate-800 text-slate-200 shadow-sm'
-                    }`}
-                  >
-                    <div
-                      onClick={() => toggleTask(task)}
-                      className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
-                    >
-                      {task.is_completed ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-slate-500 shrink-0" />
-                      )}
-                      <span className={`text-sm truncate ${task.is_completed ? 'line-through' : ''}`}>
-                        {task.title}
-                      </span>
+                  <div key={task.id} className="flex items-center justify-between p-3 rounded-lg border bg-slate-900/50 border-slate-800 text-slate-200">
+                    <div onClick={() => toggleTask(task)} className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                      {task.is_completed ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" /> : <Circle className="w-5 h-5 text-slate-500 shrink-0" />}
+                      <span className={`text-sm truncate ${task.is_completed ? 'line-through text-slate-500' : ''}`}>{task.title}</span>
                     </div>
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="text-slate-500 hover:text-red-400 p-1 transition ml-2 shrink-0"
-                    >
+                    <button onClick={() => deleteTask(task.id)} className="text-slate-500 hover:text-red-400 p-1 transition ml-2 shrink-0">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -463,7 +529,7 @@ export default function App() {
               </div>
               <div>
                 <label className="flex items-center gap-1.5 text-xs text-slate-300 mb-1">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Blockers / Topics to Review
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Doubts / Topics to Review
                 </label>
                 <textarea
                   rows={2}
@@ -472,70 +538,118 @@ export default function App() {
                   className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
                 />
               </div>
-              <button
-                onClick={saveDailyLog}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-medium rounded-lg transition border border-slate-700 shadow-md"
-              >
+              <button onClick={saveDailyLog} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-medium rounded-lg transition border border-slate-700">
                 Save & Claim XP
               </button>
             </section>
           </div>
         )}
 
-        {/* CALENDAR & PLANNER TAB */}
-        {activeTab === 'calendar' && (
-          <div className="space-y-6 max-w-2xl mx-auto">
-            <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 p-4 rounded-xl">
-              <h2 className="text-sm font-bold text-slate-100 mb-4">Schedule Future Study Session</h2>
-              <form onSubmit={addEvent} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Session Goal (e.g. Deep Learning Module 4 Exam Prep)"
-                  value={newEventTitle}
-                  onChange={(e) => setNewEventTitle(e.target.value)}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
-                />
-                <div className="flex gap-2">
+        {/* DISCUSSION GROUPS */}
+        {activeTab === 'discussions' && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            {!activeGroup ? (
+              <div className="space-y-4">
+                {profile?.role === 'admin' && (
+                  <form onSubmit={createGroup} className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-3">
+                    <h3 className="text-xs font-mono uppercase text-cyan-400 font-bold">Admin: Create New Discussion Group</h3>
+                    <input
+                      type="text"
+                      placeholder="Group Title (e.g. Deep Learning Discussion)"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Group Description / Topics"
+                      value={newGroupDesc}
+                      onChange={(e) => setNewGroupDesc(e.target.value)}
+                      className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+                    <button type="submit" className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium">
+                      Create Group
+                    </button>
+                  </form>
+                )}
+
+                <h3 className="text-xs font-mono uppercase text-slate-400">Available Discussion Groups</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {groups.map((grp) => {
+                    const status = myMemberships[grp.id];
+                    const isApproved = status === 'approved' || profile?.role === 'admin';
+                    return (
+                      <div key={grp.id} className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl flex flex-col justify-between space-y-3">
+                        <div>
+                          <h4 className="text-base font-bold text-slate-100">{grp.title}</h4>
+                          <p className="text-xs text-slate-400 mt-1">{grp.description || 'General study and Q&A group.'}</p>
+                        </div>
+                        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                          {isApproved ? (
+                            <button
+                              onClick={() => loadGroupMessages(grp)}
+                              className="px-3 py-1.5 bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-600/30"
+                            >
+                              Enter Discussion
+                            </button>
+                          ) : status === 'pending' ? (
+                            <span className="text-xs text-amber-400 font-mono">Approval Pending</span>
+                          ) : (
+                            <button
+                              onClick={() => requestToJoinGroup(grp.id)}
+                              className="px-3 py-1.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium hover:bg-slate-700"
+                            >
+                              Request to Join
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col h-[600px]">
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-slate-100">{activeGroup.title}</h3>
+                    <p className="text-xs text-slate-400">{activeGroup.description}</p>
+                  </div>
+                  <button onClick={() => setActiveGroup(null)} className="text-xs text-slate-400 hover:text-slate-200 border border-slate-800 px-3 py-1.5 rounded-lg">
+                    Back to Groups
+                  </button>
+                </div>
+
+                <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                  {groupMessages.length === 0 ? (
+                    <p className="text-center text-slate-500 text-xs italic my-auto">No questions yet. Post the first question!</p>
+                  ) : (
+                    groupMessages.map((msg) => (
+                      <div key={msg.id} className={`p-3 rounded-xl max-w-[80%] ${msg.sender_name === profile?.display_name ? 'ml-auto bg-cyan-950/40 border border-cyan-500/30' : 'bg-slate-950 border border-slate-800'}`}>
+                        <div className="flex justify-between items-center gap-4 mb-1">
+                          <span className="text-xs font-bold text-cyan-400">{msg.sender_name}</span>
+                          <span className="text-[10px] text-slate-500">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-sm text-slate-200">{msg.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form onSubmit={postGroupMessage} className="p-3 border-t border-slate-800 flex gap-2">
                   <input
-                    type="datetime-local"
-                    value={newEventDate}
-                    onChange={(e) => setNewEventDate(e.target.value)}
+                    type="text"
+                    placeholder="Ask a question or reply..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
                     className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-500"
                   />
-                  <select
-                    value={newEventTag}
-                    onChange={(e) => setNewEventTag(e.target.value)}
-                    className="rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
-                  >
-                    <option>General</option>
-                    <option>Exam</option>
-                    <option>Assignment</option>
-                    <option>Project</option>
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm font-medium transition shadow-lg shadow-cyan-600/20"
-                >
-                  Add to Calendar
-                </button>
-              </form>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">Upcoming Milestones</h3>
-              {events.map((ev) => (
-                <div key={ev.id} className="bg-slate-900/40 border border-slate-800 p-3 rounded-lg flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-medium text-slate-200">{ev.title}</h4>
-                    <p className="text-xs text-slate-400">{new Date(ev.start_time).toLocaleString()}</p>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                    {ev.tag}
-                  </span>
-                </div>
-              ))}
-            </div>
+                  <button type="submit" className="p-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg">
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         )}
 
@@ -553,9 +667,7 @@ export default function App() {
                 <div
                   key={student.id}
                   className={`flex items-center justify-between p-3.5 rounded-xl border ${
-                    student.id === user.id
-                      ? 'bg-cyan-950/30 border-cyan-500/40 shadow-md'
-                      : 'bg-slate-900/40 border-slate-800/80'
+                    student.id === user.id ? 'bg-cyan-950/30 border-cyan-500/40 shadow-md' : 'bg-slate-900/40 border-slate-800/80'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -589,6 +701,22 @@ export default function App() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-xs text-slate-300 font-mono">WhatsApp Number (with country code, e.g. +91...)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+919876543210"
+                  className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                />
+                <button onClick={savePhone} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium">
+                  Save Phone
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <span className="text-xs text-slate-400 font-mono">Total Points</span>
@@ -604,69 +732,129 @@ export default function App() {
 
         {/* ADMIN TAB */}
         {activeTab === 'admin' && profile?.role === 'admin' && (
-          <div className="max-w-2xl mx-auto space-y-4">
-            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3">
-              <ShieldAlert className="w-6 h-6 text-red-400 shrink-0" />
-              <div>
-                <h3 className="text-sm font-bold text-red-200">Admin Control Center</h3>
-                <p className="text-xs text-slate-400">Manage registered students and oversee platform growth.</p>
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="w-6 h-6 text-red-400 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-red-200">Admin Control Center</h3>
+                  <p className="text-xs text-slate-400">Manage member join requests and inspect student analytics.</p>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-xs font-mono text-slate-400 uppercase">Registered Students ({allUsers.length})</h4>
-              {allUsers.map((u) => (
-                <div key={u.id} className="p-3 bg-slate-900/40 border border-slate-800 rounded-lg flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">{u.display_name}</p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
+            {/* Join Requests */}
+            <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-3">
+              <h4 className="text-xs font-mono uppercase text-amber-400 font-bold">Pending Group Join Requests ({adminRequests.length})</h4>
+              {adminRequests.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No pending requests right now.</p>
+              ) : (
+                adminRequests.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between p-2.5 bg-slate-950 border border-slate-800 rounded-lg">
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">{req.profiles?.display_name}</span>
+                      <span className="text-xs text-slate-400"> wants to join </span>
+                      <span className="text-xs text-cyan-400 font-medium">{req.discussion_groups?.title}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => updateMemberStatus(req.id, 'approved')} className="p-1.5 bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 rounded hover:bg-emerald-600/30">
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => updateMemberStatus(req.id, 'rejected')} className="p-1.5 bg-red-600/20 border border-red-500/40 text-red-400 rounded hover:bg-red-600/30">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                    {u.role} | {u.points} XP
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
+
+            {/* Students List & WhatsApp trigger */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-mono uppercase text-slate-400">All Registered Students & Analytics ({allUsers.length})</h4>
+              <div className="grid grid-cols-1 gap-2">
+                {allUsers.map((student) => (
+                  <div key={student.id} className="p-3 bg-slate-900/40 border border-slate-800 rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-200">{student.display_name}</p>
+                      <p className="text-xs text-slate-400 font-mono">{student.email} • {student.points} XP</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => inspectStudent(student)}
+                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-lg text-xs font-medium border border-slate-700"
+                      >
+                        View Logs
+                      </button>
+                      <button
+                        onClick={() => triggerWhatsAppReminder(student.phone || '', student.display_name)}
+                        className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg text-xs font-medium border border-emerald-500/30 flex items-center gap-1"
+                      >
+                        <PhoneCall className="w-3.5 h-3.5" /> WhatsApp Reminder
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Student Analytics Modal/Section */}
+            {viewingStudent && (
+              <div className="bg-slate-900 border border-cyan-500/40 p-4 rounded-xl space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <h4 className="text-sm font-bold text-cyan-400">Recent Activity: {viewingStudent.display_name}</h4>
+                  <button onClick={() => setViewingStudent(null)} className="text-xs text-slate-400 hover:text-slate-200">Close</button>
+                </div>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {selectedStudentLogs.length === 0 ? (
+                    <p className="text-xs text-slate-500">No recent logs recorded.</p>
+                  ) : (
+                    selectedStudentLogs.map((item, i) => (
+                      <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs space-y-1">
+                        <div className="flex justify-between font-mono text-slate-400">
+                          <span>{item.date}</span>
+                          <span className="text-cyan-400 font-bold">{item.hours_studied} hrs</span>
+                        </div>
+                        {item.blockers && <p className="text-amber-400/90 italic">Blocker: {item.blockers}</p>}
+                        <div className="pt-1">
+                          {item.tasks?.map((t: any) => (
+                            <div key={t.id} className="text-slate-300 flex items-center gap-1.5">
+                              <span>{t.is_completed ? '✅' : '⏳'}</span>
+                              <span className={t.is_completed ? 'line-through text-slate-500' : ''}>{t.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
       {/* Bottom Sticky Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/90 backdrop-blur-lg border-t border-slate-800/80 py-2 px-6">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 py-2 px-4">
         <div className="max-w-md mx-auto flex justify-around items-center">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
-          >
+          <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-cyan-400' : 'text-slate-400'}`}>
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-[10px] font-medium">Today</span>
           </button>
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'calendar' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            <CalendarIcon className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Calendar</span>
+          <button onClick={() => setActiveTab('discussions')} className={`flex flex-col items-center gap-1 ${activeTab === 'discussions' ? 'text-cyan-400' : 'text-slate-400'}`}>
+            <MessageSquare className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Groups</span>
           </button>
-          <button
-            onClick={() => setActiveTab('leaderboard')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'leaderboard' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
-          >
+          <button onClick={() => setActiveTab('leaderboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'leaderboard' ? 'text-cyan-400' : 'text-slate-400'}`}>
             <Trophy className="w-5 h-5" />
             <span className="text-[10px] font-medium">Rankings</span>
           </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'}`}
-          >
+          <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-cyan-400' : 'text-slate-400'}`}>
             <User className="w-5 h-5" />
             <span className="text-[10px] font-medium">Profile</span>
           </button>
           {profile?.role === 'admin' && (
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`flex flex-col items-center gap-1 ${activeTab === 'admin' ? 'text-red-400' : 'text-slate-400 hover:text-slate-200'}`}
-            >
+            <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 ${activeTab === 'admin' ? 'text-red-400' : 'text-slate-400'}`}>
               <ShieldAlert className="w-5 h-5" />
               <span className="text-[10px] font-medium">Admin</span>
             </button>
