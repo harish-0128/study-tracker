@@ -9,11 +9,11 @@ import {
   Send, Check, X, PhoneCall, Sparkles, Target, Award,
   CalendarCheck, Palette, Eye, CalendarDays, Ban, ShieldCheck,
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
-  TrendingUp, BarChart3, CheckSquare
+  TrendingUp, CheckSquare
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-const APP_NAME = "NEXUS STUDY";
+const APP_NAME = "SYNAPSE";
 
 type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'discussions' | 'profile' | 'admin';
 type ThemeType = 'slate' | 'obsidian' | 'porcelain' | 'nordic' | 'birthday';
@@ -743,9 +743,9 @@ export default function App() {
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   return (
-    <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-200`}>
+    <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-200 antialiased`}>
       {/* Top Header */}
-      <header className={`sticky top-0 z-50 backdrop-blur-md border-b px-4 sm:px-8 py-3.5 ${curTheme.header}`}>
+      <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 sm:px-8 py-3.5 ${curTheme.header}`}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-extrabold tracking-tight text-base sm:text-lg flex items-center gap-1.5">
@@ -795,10 +795,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Container - Expansive Responsive Layout */}
-      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-32 flex-1">
+      {/* Main Container */}
+      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-28 flex-1">
         
-        {/* TAB 1: TODAY'S FOCUS (Multi-Column on Laptop) */}
+        {/* TAB 1: TODAY'S FOCUS */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {/* Top Stat Overview Grid */}
@@ -1627,8 +1627,8 @@ export default function App() {
         )}
       </main>
 
-      {/* Modern Sticky Bottom App Navigation */}
-      <nav className={`fixed bottom-0 left-0 right-0 z-[100] backdrop-blur-md border-t px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${curTheme.nav}`}>
+      {/* Modern Fixed Bottom App Navigation */}
+      <nav className={`fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${curTheme.nav}`}>
         <div className="max-w-lg mx-auto flex justify-around items-center">
           <button 
             type="button"
