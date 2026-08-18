@@ -795,8 +795,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Container */}
-      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-28 flex-1">
+      {/* Main Content Area - pb-48 ensures full scroll clearance past the bottom navigation */}
+      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-48 sm:pb-56 flex-1">
         
         {/* TAB 1: TODAY'S FOCUS */}
         {activeTab === 'dashboard' && (
@@ -945,7 +945,7 @@ export default function App() {
                   </div>
                   <button 
                     onClick={saveDailyLog} 
-                    className={`w-full py-2.5 font-semibold rounded-lg text-sm transition ${curTheme.btnPrimary}`}
+                    className={`w-full py-3 font-bold rounded-xl text-sm transition shadow-md ${curTheme.btnPrimary}`}
                   >
                     Save Reflection & Claim XP 🔥
                   </button>
