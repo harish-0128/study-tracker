@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   CheckCircle2, Circle, Plus, Trash2, BookOpen, Code2, RotateCcw, 
@@ -9,7 +9,8 @@ import {
   Send, Check, X, PhoneCall, Sparkles, Target, Award,
   CalendarCheck, Palette, Eye, CalendarDays, Ban, ShieldCheck,
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
-  TrendingUp, CheckSquare
+  TrendingUp, CheckSquare, Music, Play, Pause, RefreshCw, Volume2, Link as LinkIcon,
+  Bot, FileText, Share2, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -42,6 +43,7 @@ interface Profile {
   phone?: string;
   is_blocked?: boolean;
   preferred_theme?: string;
+  weekly_goal_hours?: number;
 }
 
 interface DiscussionGroup {
@@ -66,6 +68,23 @@ interface GroupMessage {
   sender_name: string;
   message: string;
   created_at: string;
+}
+
+interface GroupResource {
+  id: string;
+  group_id: string;
+  sender_name: string;
+  title: string;
+  resource_url: string;
+  category: string;
+  created_at: string;
+}
+
+interface LivePresence {
+  user_id: string;
+  display_name: string;
+  current_subject: string;
+  started_at: string;
 }
 
 interface StudyEvent {
@@ -156,6 +175,13 @@ const normalizeTheme = (t?: string): ThemeType => {
   return 'slate';
 };
 
+const SPOTIFY_PRESETS = [
+  { name: 'Lo-Fi Beats', embedUrl: 'https://open.spotify.com/embed/playlist/0vvXsWCC9xrXsKd4FyS8kM' },
+  { name: 'Deep Focus Ambient', embedUrl: 'https://open.spotify.com/embed/playlist/37i9dQZF1DWZeKCadgRdKQ' },
+  { name: 'Rain & Waves', embedUrl: 'https://open.spotify.com/embed/playlist/37i9dQZF1DX8Uebhn9wzrS' },
+  { name: 'White Noise', embedUrl: 'https://open.spotify.com/embed/playlist/37i9dQZF1DX4wG1z922pvX' }
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [theme, setTheme] = useState<ThemeType>('slate');
@@ -176,8 +202,29 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTier, setNewTaskTier] = useState<'LEARN' | 'APPLY' | 'REVIEW'>('LEARN');
 
-  // Student Past Logs
+  // Student Past Logs & Weekly Goal
   const [myPastLogs, setMyPastLogs] = useState<DailyLog[]>([]);
+  const [weeklyGoal, setWeeklyGoal] = useState<number>(20);
+
+  // Pomodoro Focus Timer State
+  const [pomoSeconds, setPomoSeconds] = useState(25 * 60);
+  const [isPomoRunning, setIsPomoRunning] = useState(false);
+  const [pomoMode, setPomoMode] = useState<'focus' | 'break'>('focus');
+
+  // Spotify Player State
+  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
+  const [spotifyEmbedUrl, setSpotifyEmbedUrl] = useState(SPOTIFY_PRESETS[0].embedUrl);
+  const [customSpotifyUrl, setCustomSpotifyUrl] = useState('');
+
+  // Live Virtual Library Presence
+  const [livePeers, setLivePeers] = useState<LivePresence[]>([]);
+  const [isStudyingLive, setIsStudyingLive] = useState(false);
+  const [studySubjectInput, setStudySubjectInput] = useState('Deep Work');
+
+  // AI Mentor & Generator State
+  const [aiTopicInput, setAiTopicInput] = useState('');
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [generatedPlan, setGeneratedPlan] = useState<{ learn: string[]; apply: string[]; review: string[] } | null>(null);
 
   // Calendar State
   const [events, setEvents] = useState<StudyEvent[]>([]);
@@ -197,21 +244,50 @@ export default function App() {
   const [studentEvents, setStudentEvents] = useState<StudyEvent[]>([]);
   const [editPointsValue, setEditPointsValue] = useState<string>('');
 
-  // Discussion Groups State
+  // Discussion Groups & Vault State
   const [groups, setGroups] = useState<DiscussionGroup[]>([]);
   const [activeGroup, setActiveGroup] = useState<DiscussionGroup | null>(null);
   const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
+  const [groupResources, setGroupResources] = useState<GroupResource[]>([]);
+  const [groupActiveSubTab, setGroupActiveSubTab] = useState<'chat' | 'vault'>('chat');
+  const [newResourceTitle, setNewResourceTitle] = useState('');
+  const [newResourceUrl, setNewResourceUrl] = useState('');
+  const [newResourceCat, setNewResourceCat] = useState('Notes');
   const [newMessage, setNewMessage] = useState('');
   const [myMemberships, setMyMemberships] = useState<Record<string, { status: string; role: string }>>({});
   const [groupMembersList, setGroupMembersList] = useState<GroupMember[]>([]);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
-  // Phone profile state
+  // Profile contact
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Pomodoro Timer Engine
+  useEffect(() => {
+    let timer: any = null;
+    if (isPomoRunning && pomoSeconds > 0) {
+      timer = setInterval(() => setPomoSeconds((prev) => prev - 1), 1000);
+    } else if (isPomoRunning && pomoSeconds === 0) {
+      clearInterval(timer);
+      setIsPomoRunning(false);
+      if (pomoMode === 'focus') {
+        confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
+        addPoints(25);
+        alert('🎉 Focus sprint completed! +25 XP awarded.');
+        setPomoMode('break');
+        setPomoSeconds(5 * 60);
+      } else {
+        alert('Break ended! Ready to dive back in?');
+        setPomoMode('focus');
+        setPomoSeconds(25 * 60);
+      }
+    }
+    return () => clearInterval(timer);
+  }, [isPomoRunning, pomoSeconds, pomoMode]);
+
+  // Initial Load
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('sq_theme');
@@ -228,6 +304,7 @@ export default function App() {
           await loadDailyData(currentUser.id);
           await loadMyPastLogs(currentUser.id);
           await loadAnnouncements();
+          await fetchLivePeers();
         }
       } catch (err) {
         console.error('Init error:', err);
@@ -246,6 +323,7 @@ export default function App() {
         await loadDailyData(currentUser.id);
         await loadMyPastLogs(currentUser.id);
         await loadAnnouncements();
+        await fetchLivePeers();
       }
     });
 
@@ -257,6 +335,7 @@ export default function App() {
     if (data) {
       setProfile(data);
       setPhoneNumber(data.phone || '');
+      setWeeklyGoal(data.weekly_goal_hours || 20);
       const cleanTheme = normalizeTheme(data.preferred_theme);
       setTheme(cleanTheme);
       try {
@@ -332,8 +411,85 @@ export default function App() {
       .select('id, date, hours_studied, blockers, tasks(*)')
       .eq('user_id', userId)
       .order('date', { ascending: false })
-      .limit(14);
+      .limit(60);
     setMyPastLogs(data || []);
+  };
+
+  // Virtual Library Live Presence Methods
+  const fetchLivePeers = async () => {
+    const { data } = await supabase.from('live_study_presence').select('*').order('started_at', { ascending: false });
+    setLivePeers(data || []);
+    if (user && data?.some((p: any) => p.user_id === user.id)) {
+      setIsStudyingLive(true);
+    }
+  };
+
+  const toggleLiveStudySession = async () => {
+    if (!user || !profile) return;
+    if (isStudyingLive) {
+      await supabase.from('live_study_presence').delete().eq('user_id', user.id);
+      setIsStudyingLive(false);
+      setLivePeers(livePeers.filter(p => p.user_id !== user.id));
+    } else {
+      const newEntry = {
+        user_id: user.id,
+        display_name: profile.display_name || profile.email?.split('@')[0] || 'Scholar',
+        current_subject: studySubjectInput.trim() || 'Deep Work',
+        started_at: new Date().toISOString()
+      };
+      await supabase.from('live_study_presence').upsert([newEntry]);
+      setIsStudyingLive(true);
+      setLivePeers([newEntry, ...livePeers]);
+      confetti({ particleCount: 40, spread: 50, origin: { y: 0.8 } });
+    }
+  };
+
+  // AI Study Mentor Generation Engine
+  const generateAiStudyRoadmap = () => {
+    if (!aiTopicInput.trim()) return;
+    setIsGeneratingAi(true);
+    setTimeout(() => {
+      const topic = aiTopicInput.trim();
+      const plan = {
+        learn: [
+          `Master core theoretical foundations of ${topic}`,
+          `Watch lecture walkthrough & map key formulas for ${topic}`,
+          `Study architecture diagrams and parameter flows in ${topic}`
+        ],
+        apply: [
+          `Implement a minimal prototype/problem sheet on ${topic}`,
+          `Solve 3 exam-level analytical problems on ${topic}`
+        ],
+        review: [
+          `Summarize doubts and edge-cases for ${topic}`,
+          `Conduct Feynman technique explanation of ${topic}`
+        ]
+      };
+      setGeneratedPlan(plan);
+      setIsGeneratingAi(false);
+    }, 800);
+  };
+
+  const adoptAiTasks = async () => {
+    if (!generatedPlan || !log || !user) return;
+    const newTasks: any[] = [];
+    for (const title of generatedPlan.learn) {
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'LEARN', title, is_completed: false });
+    }
+    for (const title of generatedPlan.apply) {
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'APPLY', title, is_completed: false });
+    }
+    for (const title of generatedPlan.review) {
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'REVIEW', title, is_completed: false });
+    }
+    const { data } = await supabase.from('tasks').insert(newTasks).select();
+    if (data) {
+      setTasks([...tasks, ...data]);
+      setGeneratedPlan(null);
+      setAiTopicInput('');
+      confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
+      alert('AI-generated study modules added to today\'s targets!');
+    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -349,6 +505,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    if (user) await supabase.from('live_study_presence').delete().eq('user_id', user.id);
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -420,13 +577,24 @@ export default function App() {
     alert('Daily focus log and XP saved!');
   };
 
-  const savePhone = async () => {
+  const savePhoneAndGoal = async () => {
     if (!profile) return;
-    await supabase.from('profiles').update({ phone: phoneNumber }).eq('id', profile.id);
-    alert('WhatsApp number updated!');
+    await supabase.from('profiles').update({ phone: phoneNumber, weekly_goal_hours: weeklyGoal }).eq('id', profile.id);
+    alert('Profile parameters updated!');
   };
 
-  // Group Methods
+  const applyCustomSpotify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customSpotifyUrl.trim()) return;
+    let url = customSpotifyUrl.trim();
+    if (url.includes('open.spotify.com/')) {
+      url = url.replace('open.spotify.com/', 'open.spotify.com/embed/');
+    }
+    setSpotifyEmbedUrl(url);
+    setCustomSpotifyUrl('');
+  };
+
+  // Group & Resource Vault Methods
   const loadGroups = async () => {
     const { data: groupList } = await supabase.from('discussion_groups').select('*').order('created_at', { ascending: false });
     setGroups(groupList || []);
@@ -487,6 +655,13 @@ export default function App() {
       .order('created_at', { ascending: true });
     setGroupMessages(msgData || []);
 
+    const { data: vaultData } = await supabase
+      .from('group_resources')
+      .select('*')
+      .eq('group_id', group.id)
+      .order('created_at', { ascending: false });
+    setGroupResources(vaultData || []);
+
     const { data: memData } = await supabase
       .from('group_members')
       .select('id, group_id, user_id, status, role, profiles(display_name, email)')
@@ -512,6 +687,31 @@ export default function App() {
     if (!error && data) {
       setGroupMessages([...groupMessages, data]);
       setNewMessage('');
+    }
+  };
+
+  const uploadGroupResource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newResourceTitle.trim() || !newResourceUrl.trim() || !activeGroup || !user) return;
+    const { data, error } = await supabase
+      .from('group_resources')
+      .insert([{
+        group_id: activeGroup.id,
+        user_id: user.id,
+        sender_name: profile?.display_name || 'Scholar',
+        title: newResourceTitle.trim(),
+        resource_url: newResourceUrl.trim(),
+        category: newResourceCat
+      }])
+      .select()
+      .single();
+
+    if (!error && data) {
+      setGroupResources([data, ...groupResources]);
+      setNewResourceTitle('');
+      setNewResourceUrl('');
+      await addPoints(10);
+      alert('Resource pinned to vault! +10 XP');
     }
   };
 
@@ -663,6 +863,45 @@ export default function App() {
     }
   }, [activeTab]);
 
+  // Derived Tier & Gamification Analytics
+  const studentTotalHours = useMemo(() => {
+    return myPastLogs.reduce((acc, curr) => acc + (curr.hours_studied || 0), 0);
+  }, [myPastLogs]);
+
+  const weeklyLoggedHours = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return myPastLogs
+      .filter(l => l.date && new Date(l.date) >= sevenDaysAgo)
+      .reduce((acc, curr) => acc + (curr.hours_studied || 0), 0);
+  }, [myPastLogs]);
+
+  const tierRatio = useMemo(() => {
+    let learn = 0, apply = 0, review = 0;
+    myPastLogs.forEach(l => {
+      l.tasks?.forEach(t => {
+        if (t.tier === 'LEARN') learn++;
+        if (t.tier === 'APPLY') apply++;
+        if (t.tier === 'REVIEW') review++;
+      });
+    });
+    const total = learn + apply + review || 1;
+    return {
+      learn: Math.round((learn / total) * 100),
+      apply: Math.round((apply / total) * 100),
+      review: Math.round((review / total) * 100)
+    };
+  }, [myPastLogs]);
+
+  const leagueRank = useMemo(() => {
+    const pts = profile?.points || 0;
+    if (pts >= 1000) return { name: 'Master Division 💎', color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' };
+    if (pts >= 500) return { name: 'Diamond Tier 🔷', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' };
+    if (pts >= 250) return { name: 'Gold League 🏆', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' };
+    if (pts >= 100) return { name: 'Silver Tier 🥈', color: 'text-slate-300 border-slate-400/40 bg-slate-400/10' };
+    return { name: 'Bronze League 🥉', color: 'text-amber-700 border-amber-700/40 bg-amber-700/10' };
+  }, [profile?.points]);
+
   const curTheme = themeStyles[theme] || themeStyles.slate;
   const isLight = curTheme.isLight;
 
@@ -676,6 +915,10 @@ export default function App() {
 
   const displayNameDisplay = profile?.display_name || profile?.email?.split('@')[0] || 'User';
   const avatarLetter = (displayNameDisplay.charAt(0) || 'U').toUpperCase();
+
+  const pomoMinutes = Math.floor(pomoSeconds / 60);
+  const pomoSecs = pomoSeconds % 60;
+  const formattedPomoTime = `${String(pomoMinutes).padStart(2, '0')}:${String(pomoSecs).padStart(2, '0')}`;
 
   if (loading) {
     return (
@@ -741,6 +984,7 @@ export default function App() {
 
   const completedCount = tasks.filter(t => t.is_completed).length;
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+  const weeklyPercent = Math.min(Math.round((weeklyLoggedHours / (weeklyGoal || 20)) * 100), 100);
 
   return (
     <div className={`min-h-screen ${curTheme.bg} flex flex-col font-sans transition-colors duration-200 antialiased`}>
@@ -756,13 +1000,27 @@ export default function App() {
               <Flame className="w-3.5 h-3.5 fill-current" />
               <span>{profile?.points || 0} XP</span>
             </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border hidden sm:inline-block ${leagueRank.color}`}>
+              {leagueRank.name}
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs opacity-60 hidden sm:inline-block font-mono">{displayNameDisplay}</span>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowMusicPlayer(!showMusicPlayer)}
+              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                showMusicPlayer ? 'bg-emerald-600 border-emerald-500 text-white shadow-md' : 'border-inherit opacity-75 hover:opacity-100'
+              }`}
+              title="Toggle Spotify Relax Lounge"
+            >
+              <Music className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Spotify Lounge</span>
+            </button>
+
+            <span className="text-xs opacity-60 hidden md:inline-block font-mono">{displayNameDisplay}</span>
             <button 
               onClick={handleSignOut} 
-              className="text-xs p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:text-red-500 transition"
+              className="text-xs p-2 rounded-xl opacity-60 hover:opacity-100 hover:text-red-500 transition"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
@@ -770,6 +1028,70 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Floating Spotify Lounge Drawer */}
+      {showMusicPlayer && (
+        <div className={`max-w-6xl w-full mx-auto px-4 sm:px-8 pt-4 transition-all animate-in fade-in slide-in-from-top-4`}>
+          <div className={`p-4 sm:p-5 rounded-2xl border ${curTheme.card} shadow-2xl space-y-3.5`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <Volume2 className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Study Audio & Ambient Lounge</h3>
+                  <p className="text-[11px] opacity-60">Listen to study beats, ambient rain, or stream your custom Spotify playlist.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowMusicPlayer(false)}
+                className="text-xs border border-inherit px-2.5 py-1 rounded-lg opacity-70 hover:opacity-100"
+              >
+                Hide Player
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              {SPOTIFY_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => setSpotifyEmbedUrl(preset.embedUrl)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                    spotifyEmbedUrl === preset.embedUrl ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : 'border-inherit opacity-75 hover:opacity-100'
+                  }`}
+                >
+                  {preset.name}
+                </button>
+              ))}
+
+              <form onSubmit={applyCustomSpotify} className="flex-1 min-w-[240px] flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Paste Spotify Playlist Link..."
+                  value={customSpotifyUrl}
+                  onChange={(e) => setCustomSpotifyUrl(e.target.value)}
+                  className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                />
+                <button type="submit" className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1">
+                  <LinkIcon className="w-3 h-3" /> Load
+                </button>
+              </form>
+            </div>
+
+            <div className="rounded-xl overflow-hidden shadow-inner border border-white/10 bg-black/40">
+              <iframe
+                src={spotifyEmbedUrl}
+                width="100%"
+                height="152"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Broadcast Announcement Bar */}
       {announcements.length > 0 && (
@@ -795,14 +1117,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Area - pb-48 ensures full scroll clearance past the bottom navigation */}
-      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-48 sm:pb-56 flex-1">
+      {/* Main Content Area */}
+      <main className="max-w-6xl w-full mx-auto p-4 sm:p-8 pb-52 flex-1">
         
         {/* TAB 1: TODAY'S FOCUS */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {/* Top Stat Overview Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className={`p-5 rounded-xl ${curTheme.card}`}>
                 <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" /> Today's Focus
@@ -819,19 +1141,149 @@ export default function App() {
 
               <div className={`p-5 rounded-xl ${curTheme.card}`}>
                 <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5" /> Daily Progress
+                  <TrendingUp className="w-3.5 h-3.5" /> Weekly Goal ({weeklyGoal}h)
                 </span>
                 <div className="flex items-baseline justify-between mt-1">
-                  <p className="text-3xl font-bold">{progress}%</p>
-                  <span className="text-xs opacity-60 font-mono">Status: {progress === 100 ? 'Mastered 🎯' : 'In Progress'}</span>
+                  <p className="text-3xl font-bold">{weeklyPercent}%</p>
+                  <span className="text-xs opacity-60 font-mono">{weeklyLoggedHours.toFixed(1)} / {weeklyGoal} hrs</span>
                 </div>
                 <div className={`w-full rounded-full h-1.5 overflow-hidden mt-3 ${isLight ? 'bg-slate-200' : 'bg-slate-800'}`}>
                   <div
                     className={`h-full transition-all duration-300 ${isLight ? 'bg-blue-600' : 'bg-blue-500'}`}
-                    style={{ width: `${progress}%` }}
+                    style={{ width: `${weeklyPercent}%` }}
                   />
                 </div>
               </div>
+
+              {/* Pomodoro Quick Sprint Widget */}
+              <div className={`p-5 rounded-xl ${curTheme.card} flex flex-col justify-between border-blue-500/30`}>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
+                    <Target className="w-3.5 h-3.5 text-blue-400" /> Focus Sprint
+                  </span>
+                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${pomoMode === 'focus' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {pomoMode}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between my-1">
+                  <span className="text-2xl font-black font-mono tracking-tight">{formattedPomoTime}</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => setIsPomoRunning(!isPomoRunning)}
+                      className={`p-2 rounded-lg text-white font-bold transition shadow-sm ${isPomoRunning ? 'bg-amber-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+                    >
+                      {isPomoRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsPomoRunning(false);
+                        setPomoSeconds(25 * 60);
+                        setPomoMode('focus');
+                      }}
+                      className="p-2 rounded-lg border border-inherit opacity-60 hover:opacity-100"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Virtual Study Library: Live Co-Studying Presence */}
+            <div className={`p-4 sm:p-5 rounded-2xl border ${curTheme.card} space-y-3`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <h3 className="text-xs font-bold font-mono uppercase tracking-wider">
+                    Virtual Library: Studying Live Now ({livePeers.length})
+                  </h3>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Current subject (e.g. Deep Learning)..."
+                    value={studySubjectInput}
+                    onChange={(e) => setStudySubjectInput(e.target.value)}
+                    disabled={isStudyingLive}
+                    className={`rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                  />
+                  <button
+                    onClick={toggleLiveStudySession}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      isStudyingLive ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" /> {isStudyingLive ? 'Leave Room' : 'Go Live & Study'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {livePeers.length === 0 ? (
+                  <p className="text-xs italic opacity-40 py-1">No one is in the virtual library yet. Be the first to start!</p>
+                ) : (
+                  livePeers.map((p) => (
+                    <div key={p.user_id} className={`p-2 px-3 rounded-xl border border-inherit shrink-0 flex items-center gap-2.5 text-xs ${isLight ? 'bg-slate-50' : 'bg-slate-950/60'}`}>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      <div>
+                        <p className="font-bold">{p.display_name}</p>
+                        <p className="text-[10px] opacity-60 font-mono">{p.current_subject}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* AI Academic Mentor Roadmap Generator */}
+            <div className={`p-4 sm:p-5 rounded-2xl border border-purple-500/30 ${curTheme.card} space-y-3`}>
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-purple-400" />
+                <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-purple-400">
+                  AI Academic Mentor: Instant Study Plan Generator
+                </h3>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter topic to decompose (e.g. Convolutional Neural Networks, Dynamic Programming)..."
+                  value={aiTopicInput}
+                  onChange={(e) => setAiTopicInput(e.target.value)}
+                  className={`flex-1 rounded-lg px-3.5 py-2 text-xs outline-none ${curTheme.input}`}
+                />
+                <button
+                  onClick={generateAiStudyRoadmap}
+                  disabled={isGeneratingAi}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs hover:opacity-90 transition flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> {isGeneratingAi ? 'Synthesizing...' : 'Generate 3-Tier Plan'}
+                </button>
+              </div>
+
+              {generatedPlan && (
+                <div className={`p-4 rounded-xl border border-purple-500/30 space-y-3 ${isLight ? 'bg-purple-50/50' : 'bg-purple-950/20'}`}>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="font-bold text-blue-400 flex items-center gap-1 mb-1"><BookOpen className="w-3 h-3" /> LEARN</span>
+                      {generatedPlan.learn.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
+                    </div>
+                    <div>
+                      <span className="font-bold text-emerald-400 flex items-center gap-1 mb-1"><Code2 className="w-3 h-3" /> APPLY</span>
+                      {generatedPlan.apply.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
+                    </div>
+                    <div>
+                      <span className="font-bold text-amber-400 flex items-center gap-1 mb-1"><RotateCcw className="w-3 h-3" /> REVIEW</span>
+                      {generatedPlan.review.map((s, i) => <p key={i} className="opacity-80">• {s}</p>)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={adoptAiTasks}
+                    className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow-md transition"
+                  >
+                    Adopt This Plan into Today's Roadmap ✨
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Main Laptop 2-Column Grid */}
@@ -952,17 +1404,53 @@ export default function App() {
                 </section>
               </div>
 
-              {/* Right 1 Column: Student's Past History Feed */}
+              {/* Right 1 Column: Tier Ratio Breakdown & Past Study Logs */}
               <div className="space-y-4">
+                {/* 3-Tier Distribution Breakdown */}
+                <div className={`p-5 rounded-xl ${curTheme.card} space-y-3`}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4" /> Study Ratio Distribution
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span className="text-blue-400">Learn (Theory)</span>
+                        <span>{tierRatio.learn}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-blue-500 h-full" style={{ width: `${tierRatio.learn}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span className="text-emerald-400">Apply (Practice/Code)</span>
+                        <span>{tierRatio.apply}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full" style={{ width: `${tierRatio.apply}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span className="text-amber-400">Review (Doubts/Feynman)</span>
+                        <span>{tierRatio.review}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-amber-500 h-full" style={{ width: `${tierRatio.review}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className={`p-5 rounded-xl ${curTheme.card} space-y-4`}>
                   <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                    <History className="w-4 h-4" /> My Past Study Logs
+                    <History className="w-4 h-4" /> My Recent Study Logs
                   </h3>
                   
                   {myPastLogs.length === 0 ? (
                     <p className="text-xs italic opacity-40 py-4 text-center">No previous logs recorded yet.</p>
                   ) : (
-                    <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
                       {myPastLogs.map((past, i) => (
                         <div key={i} className={`p-3 rounded-lg border border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                           <div className="flex justify-between font-mono font-semibold">
@@ -1068,7 +1556,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: DISCUSSION GROUPS */}
+        {/* TAB 3: DISCUSSION GROUPS & NOTES VAULT */}
         {activeTab === 'discussions' && (
           <div className="max-w-5xl mx-auto space-y-6">
             {!activeGroup ? (
@@ -1116,7 +1604,7 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs opacity-60">{grp.description || 'Community Q&A and doubt resolution.'}</p>
+                          <p className="text-xs opacity-60">{grp.description || 'Community Q&A and notes repository.'}</p>
                         </div>
                         <div className="pt-3 border-t border-inherit flex items-center justify-between">
                           {isApproved ? (
@@ -1124,7 +1612,7 @@ export default function App() {
                               onClick={() => loadGroupMessagesAndMembers(grp)}
                               className={`w-full py-2 rounded-lg text-xs font-medium transition text-center ${curTheme.btnPrimary}`}
                             >
-                              Enter Discussion
+                              Enter Discussion & Vault
                             </button>
                           ) : membership?.status === 'pending' ? (
                             <span className="text-xs text-amber-500 font-mono mx-auto">Pending Approval</span>
@@ -1146,11 +1634,28 @@ export default function App() {
               <div className={`rounded-xl flex flex-col h-[650px] border ${curTheme.card} overflow-hidden`}>
                 <div className="p-4 border-b border-inherit flex justify-between items-center">
                   <div>
-                    <h3 className="font-bold text-sm flex items-center gap-2">
-                      {activeGroup.title}
-                      {isGroupModerator && <span className="text-[10px] opacity-60 font-mono">(Moderator Mode)</span>}
-                    </h3>
-                    <p className="text-xs opacity-60">{activeGroup.description}</p>
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-sm flex items-center gap-2">
+                        {activeGroup.title}
+                        {isGroupModerator && <span className="text-[10px] opacity-60 font-mono">(Moderator Mode)</span>}
+                      </h3>
+                      {/* Sub-tab switcher */}
+                      <div className="flex rounded-lg border border-inherit p-0.5 text-xs">
+                        <button
+                          onClick={() => setGroupActiveSubTab('chat')}
+                          className={`px-3 py-1 rounded-md font-semibold transition ${groupActiveSubTab === 'chat' ? curTheme.btnPrimary : 'opacity-60'}`}
+                        >
+                          Discussions
+                        </button>
+                        <button
+                          onClick={() => setGroupActiveSubTab('vault')}
+                          className={`px-3 py-1 rounded-md font-semibold transition flex items-center gap-1 ${groupActiveSubTab === 'vault' ? curTheme.btnPrimary : 'opacity-60'}`}
+                        >
+                          <Bookmark className="w-3 h-3" /> Notes Vault ({groupResources.length})
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs opacity-60 mt-1">{activeGroup.description}</p>
                   </div>
                   <button onClick={() => setActiveGroup(null)} className="text-xs border border-inherit px-3 py-1.5 rounded-lg opacity-75 hover:opacity-100">
                     Back to Hubs
@@ -1191,35 +1696,111 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex-1 p-4 overflow-y-auto space-y-3">
-                  {groupMessages.length === 0 ? (
-                    <p className="text-center text-xs italic my-auto opacity-40">No messages yet. Ask a question or post notes!</p>
-                  ) : (
-                    groupMessages.map((msg) => (
-                      <div key={msg.id} className={`p-3 rounded-xl max-w-[80%] text-xs ${msg.sender_name === displayNameDisplay ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
-                        <div className="flex justify-between items-center gap-4 mb-1">
-                          <span className="font-bold opacity-90">{msg.sender_name}</span>
-                          <span className="text-[10px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <p className="text-sm">{msg.message}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {/* SubTab 1: Chat Stream */}
+                {groupActiveSubTab === 'chat' && (
+                  <>
+                    <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                      {groupMessages.length === 0 ? (
+                        <p className="text-center text-xs italic my-auto opacity-40">No messages yet. Ask a question or post notes!</p>
+                      ) : (
+                        groupMessages.map((msg) => (
+                          <div key={msg.id} className={`p-3 rounded-xl max-w-[80%] text-xs ${msg.sender_name === displayNameDisplay ? (isLight ? 'ml-auto bg-blue-50 border border-blue-200' : 'ml-auto bg-blue-950/60 border border-blue-800') : (isLight ? 'bg-slate-50 border border-slate-200' : 'bg-slate-900 border border-slate-800')}`}>
+                            <div className="flex justify-between items-center gap-4 mb-1">
+                              <span className="font-bold opacity-90">{msg.sender_name}</span>
+                              <span className="text-[10px] opacity-50">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <p className="text-sm">{msg.message}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
 
-                <form onSubmit={postGroupMessage} className="p-3 border-t border-inherit flex gap-2">
-                  <input
-                    type="text"
-                    placeholder={isApprovedMember ? "Type a question or answer..." : "Join group to participate"}
-                    disabled={!isApprovedMember}
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    className={`flex-1 rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
-                  />
-                  <button type="submit" disabled={!isApprovedMember} className={`px-4 py-2 rounded-lg ${curTheme.btnPrimary}`}>
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
+                    <form onSubmit={postGroupMessage} className="p-3 border-t border-inherit flex gap-2">
+                      <input
+                        type="text"
+                        placeholder={isApprovedMember ? "Type a question or answer..." : "Join group to participate"}
+                        disabled={!isApprovedMember}
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        className={`flex-1 rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
+                      />
+                      <button type="submit" disabled={!isApprovedMember} className={`px-4 py-2 rounded-lg ${curTheme.btnPrimary}`}>
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                  </>
+                )}
+
+                {/* SubTab 2: Resource & Notes Vault */}
+                {groupActiveSubTab === 'vault' && (
+                  <div className="flex-1 p-4 flex flex-col justify-between overflow-hidden">
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                      {groupResources.length === 0 ? (
+                        <p className="text-center text-xs italic my-auto opacity-40">No notes or cheat-sheets uploaded yet.</p>
+                      ) : (
+                        groupResources.map((res) => (
+                          <div key={res.id} className={`p-3.5 rounded-xl border border-inherit flex items-center justify-between gap-3 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold">{res.title}</h4>
+                                <p className="text-[11px] opacity-60">Uploaded by {res.sender_name} • {res.category}</p>
+                              </div>
+                            </div>
+                            <a
+                              href={res.resource_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 rounded-lg border border-inherit text-xs font-semibold hover:bg-blue-600 hover:text-white transition flex items-center gap-1.5"
+                            >
+                              Open <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {isApprovedMember && (
+                      <form onSubmit={uploadGroupResource} className="p-3 border-t border-inherit space-y-2 mt-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Resource Title (e.g. Backprop Cheat Sheet PDF)"
+                            value={newResourceTitle}
+                            onChange={(e) => setNewResourceTitle(e.target.value)}
+                            className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                            required
+                          />
+                          <select
+                            value={newResourceCat}
+                            onChange={(e) => setNewResourceCat(e.target.value)}
+                            className={`rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                          >
+                            <option>Notes</option>
+                            <option>Formula Sheet</option>
+                            <option>Assignment Solution</option>
+                            <option>Video/Slides</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            placeholder="Resource URL (Google Drive / GitHub / PDF link)..."
+                            value={newResourceUrl}
+                            onChange={(e) => setNewResourceUrl(e.target.value)}
+                            className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                            required
+                          />
+                          <button type="submit" className={`px-4 py-1.5 rounded-lg text-xs font-bold ${curTheme.btnPrimary}`}>
+                            Upload to Vault
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1230,35 +1811,39 @@ export default function App() {
           <div className="max-w-3xl mx-auto space-y-5">
             <div className={`p-6 rounded-xl text-center ${curTheme.card}`}>
               <Trophy className="w-10 h-10 text-amber-500 mx-auto mb-2" />
-              <h2 className="text-lg font-bold">Monthly Rankings & Leaderboard</h2>
+              <h2 className="text-lg font-bold">Monthly Rankings & Tiered Leagues</h2>
               <p className="text-xs opacity-60">Consistency scores computed by completed study tasks and logged focus hours.</p>
             </div>
 
             <div className="space-y-2.5">
-              {leaderboard.map((student, idx) => (
-                <div
-                  key={student.id}
-                  className={`flex items-center justify-between p-4 rounded-xl border ${
-                    student.id === user.id ? (isLight ? 'bg-blue-50 border-blue-300 font-medium' : 'bg-slate-800/80 border-slate-700 font-medium') : curTheme.card
-                  }`}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <span className="font-mono text-sm w-6 font-bold opacity-60">
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <h4 className="text-sm font-semibold">
-                        {student.display_name || student.email.split('@')[0]} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
-                      </h4>
-                      <p className="text-xs opacity-60 capitalize">{student.role}</p>
+              {leaderboard.map((student, idx) => {
+                const pts = student.points || 0;
+                const tierTag = pts >= 1000 ? 'Master' : pts >= 500 ? 'Diamond' : pts >= 250 ? 'Gold' : pts >= 100 ? 'Silver' : 'Bronze';
+                return (
+                  <div
+                    key={student.id}
+                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                      student.id === user.id ? (isLight ? 'bg-blue-50 border-blue-300 font-medium' : 'bg-slate-800/80 border-slate-700 font-medium') : curTheme.card
+                    }`}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <span className="font-mono text-sm w-6 font-bold opacity-60">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          {student.display_name || student.email.split('@')[0]} {student.id === user.id && <span className={`text-xs ${curTheme.accent}`}>(You)</span>}
+                        </h4>
+                        <p className="text-xs opacity-60 capitalize">{student.role} • <span className="font-semibold text-amber-400">{tierTag} Division</span></p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 font-bold text-sm opacity-90">
+                      <Flame className="w-4 h-4 text-amber-500 fill-current" />
+                      <span>{student.points} XP</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 font-bold text-sm opacity-90">
-                    <Flame className="w-4 h-4 text-amber-500 fill-current" />
-                    <span>{student.points} XP</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1282,9 +1867,73 @@ export default function App() {
                   <span className="text-lg font-bold text-amber-500">{profile?.points || 0}</span>
                 </div>
                 <div className="px-4 py-2 rounded-lg border border-inherit">
-                  <span className="text-[10px] font-mono opacity-60 block">ROLE STATUS</span>
-                  <span className="text-lg font-bold capitalize">{profile?.role || 'Student'}</span>
+                  <span className="text-[10px] font-mono opacity-60 block">TOTAL FOCUS</span>
+                  <span className="text-lg font-bold">{studentTotalHours.toFixed(1)} hrs</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Achievement Badges Vault */}
+            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
+                <Medal className="w-4 h-4 text-amber-400" /> Unlockable Milestone Badges
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 1 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">🚀</span>
+                  <p className="font-bold">First Step</p>
+                  <p className="text-[9px] opacity-60">Log 1st Hour</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 10 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">⚡</span>
+                  <p className="font-bold">Momentum</p>
+                  <p className="text-[9px] opacity-60">10+ Hours Logged</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 50 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">🔥</span>
+                  <p className="font-bold">Half Century</p>
+                  <p className="text-[9px] opacity-60">50 Hours Mastered</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${studentTotalHours >= 100 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">👑</span>
+                  <p className="font-bold">Century Club</p>
+                  <p className="text-[9px] opacity-60">100 Hours Club</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${(profile?.points || 0) >= 200 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">🎯</span>
+                  <p className="font-bold">Task Grinder</p>
+                  <p className="text-[9px] opacity-60">200+ Points</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center text-xs space-y-1 ${(profile?.points || 0) >= 500 ? 'border-amber-500/40 bg-amber-500/10' : 'opacity-40'}`}>
+                  <span className="text-xl">💎</span>
+                  <p className="font-bold">Scholar King</p>
+                  <p className="text-[9px] opacity-60">Diamond Division</p>
+                </div>
+              </div>
+            </div>
+
+            {/* GitHub-Style 60-Day Activity Heatmap Grid */}
+            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
+                <FlameKindling className="w-4 h-4 text-emerald-400" /> Study Consistency Heatmap (Past 60 Days)
+              </h3>
+              <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-black/20 border border-inherit">
+                {Array.from({ length: 60 }).map((_, idx) => {
+                  const targetDate = new Date();
+                  targetDate.setDate(targetDate.getDate() - (59 - idx));
+                  const dateStr = targetDate.toISOString().split('T')[0];
+                  const matchedLog = myPastLogs.find(l => l.date === dateStr);
+                  const hrs = matchedLog?.hours_studied || 0;
+                  const intensity = hrs >= 4 ? 'bg-emerald-500' : hrs >= 2 ? 'bg-emerald-600' : hrs > 0 ? 'bg-emerald-800' : 'bg-slate-800/60';
+
+                  return (
+                    <div
+                      key={idx}
+                      title={`${dateStr}:${hrs} hrs studied`}
+                      className={`w-3.5 h-3.5 rounded-sm transition-all hover:scale-125 cursor-pointer ${intensity}`}
+                    />
+                  );
+                })}
               </div>
             </div>
 
@@ -1345,57 +1994,33 @@ export default function App() {
               </div>
             </div>
 
-            {/* WhatsApp Setting */}
-            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-2`}>
-              <label className="text-xs font-semibold font-mono opacity-75">WhatsApp Contact for Daily Study Alerts</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="+91..."
-                  className={`flex-1 rounded-lg px-3.5 py-2 text-sm outline-none ${curTheme.input}`}
-                />
-                <button onClick={savePhone} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium">
-                  Save Contact
-                </button>
-              </div>
-            </div>
-
-            {/* Student Full Past Log Timeline */}
+            {/* Profile Settings (Weekly Goal & WhatsApp) */}
             <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-3`}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                <History className="w-4 h-4" /> Full Study Log Timeline
-              </h3>
-              {myPastLogs.length === 0 ? (
-                <p className="text-xs italic opacity-40 text-center py-4">No past logs found.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {myPastLogs.map((past, i) => (
-                    <div key={i} className={`p-3.5 rounded-lg border border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
-                      <div className="flex justify-between font-mono font-bold">
-                        <span>{past.date}</span>
-                        <span className={curTheme.accent}>{past.hours_studied} hrs</span>
-                      </div>
-                      {past.blockers && (
-                        <p className="text-[11px] opacity-75 italic">Blocker: {past.blockers}</p>
-                      )}
-                      <div className="space-y-0.5 pt-1">
-                        {past.tasks && past.tasks.length > 0 ? (
-                          past.tasks.map((t) => (
-                            <div key={t.id} className="flex items-center gap-1 text-[11px] opacity-75">
-                              <span>{t.is_completed ? '✓' : '•'}</span>
-                              <span className={t.is_completed ? 'line-through opacity-60' : ''}>{t.title}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-[10px] opacity-40">No tasks logged</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Reminder Contact</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] opacity-75 block mb-1">Weekly Target Goal (Hours)</label>
+                  <input
+                    type="number"
+                    value={weeklyGoal}
+                    onChange={(e) => setWeeklyGoal(Number(e.target.value))}
+                    className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                  />
                 </div>
-              )}
+                <div>
+                  <label className="text-[11px] opacity-75 block mb-1">WhatsApp Number (+91...)</label>
+                  <input
+                    type="text"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+91..."
+                    className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${curTheme.input}`}
+                  />
+                </div>
+              </div>
+              <button onClick={savePhoneAndGoal} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
+                Save Target Goals & WhatsApp Profile
+              </button>
             </div>
           </div>
         )}
@@ -1654,7 +2279,7 @@ export default function App() {
             className={`flex flex-col items-center justify-center p-1.5 min-w-[52px] rounded-lg transition ${activeTab === 'discussions' ? `${curTheme.accent} font-bold` : 'opacity-50 hover:opacity-100'}`}
           >
             <MessageSquare className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Hub</span>
+            <span className="text-[10px] leading-tight">Hub & Vault</span>
           </button>
           
           <button 
