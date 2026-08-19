@@ -290,12 +290,27 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isPomoRunning, pomoSeconds, pomoMode]);
 
-  // Initial Load
+  // Initial Load & Widget Shortcut Listener
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('sq_theme');
       if (savedTheme) setTheme(normalizeTheme(savedTheme));
     } catch (_) {}
+
+    // Handle Quick Action Widget URLs
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const action = urlParams.get('action');
+
+      if (action === 'sprint') {
+        setActiveTab('dashboard');
+        setIsPomoRunning(true);
+      } else if (action === 'log') {
+        setActiveTab('dashboard');
+      } else if (action === 'hub') {
+        setActiveTab('discussions');
+      }
+    }
 
     const init = async () => {
       try {
@@ -996,7 +1011,7 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             <img 
               src="/logo.png" 
-              alt="Logo" 
+              alt="Synapse Logo" 
               className="w-7 h-7 object-contain rounded-md"
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
@@ -1314,7 +1329,9 @@ export default function App() {
                     tasks.map((task) => (
                       <div 
                         key={task.id} 
-                        className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition ${                           task.is_completed ? 'opacity-40' : ''                         } ${curTheme.card}`}
+                        className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition ${
+                          task.is_completed ? 'opacity-40' : ''
+                        } ${curTheme.card}`}
                       >
                         <div onClick={() => toggleTask(task)} className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
                           {task.is_completed ? (
@@ -1888,7 +1905,7 @@ export default function App() {
                   return (
                     <div
                       key={idx}
-                      title={`${dateStr}:${hrs} hrs studied`}
+                      title={`${dateStr}: ${hrs} hrs studied`}
                       className={`w-3 h-3 rounded-xs transition-all hover:scale-125 cursor-pointer ${intensity}`}
                     />
                   );

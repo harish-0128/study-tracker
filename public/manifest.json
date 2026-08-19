@@ -4,6 +4,7 @@
   "description": "Daily study tracker, exam milestone planner, AI mentor, and peer study hubs.",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0b0f19",
   "theme_color": "#0b0f19",
   "orientation": "portrait",
@@ -24,6 +25,29 @@
       "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Focus Sprint",
+      "short_name": "Sprint",
+      "description": "Launch 25-minute Pomodoro focus timer",
+      "url": "/?action=sprint",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Log Daily Reflection",
+      "short_name": "Log Hours",
+      "description": "Log evening study hours and blockers",
+      "url": "/?action=log",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Study Communities",
+      "short_name": "Hub",
+      "description": "Open peer study groups and notes vault",
+      "url": "/?action=hub",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
