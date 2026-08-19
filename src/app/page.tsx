@@ -11,7 +11,7 @@ import {
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
   TrendingUp, CheckSquare, Music, Play, Pause, RefreshCw, Volume2, Link as LinkIcon,
   Bot, FileText, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Bell, BellRing, Hourglass
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -25,6 +25,7 @@ interface Task {
   tier: 'LEARN' | 'APPLY' | 'REVIEW';
   title: string;
   is_completed: boolean;
+  due_time?: string; // e.g. "17:30"
 }
 
 interface DailyLog {
@@ -205,6 +206,11 @@ export default function App() {
   const [blockers, setBlockers] = useState<string>('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTier, setNewTaskTier] = useState<'LEARN' | 'APPLY' | 'REVIEW'>('LEARN');
+  const [newTaskDueTime, setNewTaskDueTime] = useState('');
+
+  // Notifications State
+  const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  const [notifiedTaskIds, setNotifiedTaskIds] = useState<Set<string>>(new Set());
 
   // Student Past Logs & Weekly Goal
   const [myPastLogs, setMyPastLogs] = useState<DailyLog[]>([]);
@@ -267,6 +273,53 @@ export default function App() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Request Notification Permissions
+  const requestNotificationAccess = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        setNotificationsAllowed(true);
+        new Notification('SYNAPSE Reminders Active 🔔', {
+          body: 'You will receive deadline notifications 1 hour before scheduled study tasks!',
+          icon: '/logo.png'
+        });
+      }
+    }
+  };
+
+  // 1-Hour Left Deadline Checker Engine
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationsAllowed(Notification.permission === 'granted');
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      tasks.forEach((t) => {
+        if (!t.due_time || t.is_completed || notifiedTaskIds.has(t.id)) return;
+
+        const [dueHour, dueMin] = t.due_time.split(':').map(Number);
+        const targetTime = new Date();
+        targetTime.setHours(dueHour, dueMin, 0, 0);
+
+        const diffMinutes = Math.round((targetTime.getTime() - now.getTime()) / (1000 * 60));
+
+        // Alert if within 60 minutes
+        if (diffMinutes <= 60 && diffMinutes > 0) {
+          if (Notification.permission === 'granted') {
+            new Notification(`⚠️ 1 Hour Left: ${t.title}`, {
+              body: `Your deadline is in ${diffMinutes} minutes (${t.due_time}). Keep pushing!`,
+              icon: '/logo.png'
+            });
+          }
+          setNotifiedTaskIds((prev) => new Set(prev).add(t.id));
+        }
+      });
+    }, 30000); // Checks every 30s
+
+    return () => clearInterval(interval);
+  }, [tasks, notifiedTaskIds]);
+
   // Pomodoro Timer Engine
   useEffect(() => {
     let timer: any = null;
@@ -297,7 +350,6 @@ export default function App() {
       if (savedTheme) setTheme(normalizeTheme(savedTheme));
     } catch (_) {}
 
-    // Handle Quick Action Widget URLs
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const action = urlParams.get('action');
@@ -391,6 +443,7 @@ export default function App() {
     setAnnouncements(data || []);
   };
 
+  // Daily Data & Automatic Task Rollover from Previous Day
   const loadDailyData = async (userId: string) => {
     let { data: dailyLog } = await supabase
       .from('daily_logs')
@@ -399,13 +452,48 @@ export default function App() {
       .eq('date', todayStr)
       .maybeSingle();
 
+    // If new day, create log & migrate unfinished tasks automatically
     if (!dailyLog) {
       const { data: newLog } = await supabase
         .from('daily_logs')
         .insert([{ user_id: userId, date: todayStr, hours_studied: 0, blockers: '' }])
         .select()
         .single();
+      
       dailyLog = newLog;
+
+      if (dailyLog) {
+        // Query the most recent previous day
+        const { data: previousLog } = await supabase
+          .from('daily_logs')
+          .select('id')
+          .eq('user_id', userId)
+          .neq('date', todayStr)
+          .order('date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (previousLog) {
+          const { data: uncompletedPrevious } = await supabase
+            .from('tasks')
+            .select('title, tier, due_time')
+            .eq('daily_log_id', previousLog.id)
+            .eq('is_completed', false);
+
+          if (uncompletedPrevious && uncompletedPrevious.length > 0) {
+            const rolledTasks = uncompletedPrevious.map(t => ({
+              daily_log_id: dailyLog.id,
+              user_id: userId,
+              tier: t.tier,
+              title: `${t.title} ↩`,
+              due_time: t.due_time,
+              is_completed: false
+            }));
+
+            await supabase.from('tasks').insert(rolledTasks);
+          }
+        }
+      }
     }
 
     if (dailyLog) {
@@ -536,6 +624,7 @@ export default function App() {
     await supabase.from('profiles').update({ points: newPoints }).eq('id', profile.id);
   };
 
+  // Add Task with Due Time / Deadline
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (profile?.is_blocked) {
@@ -551,6 +640,7 @@ export default function App() {
         user_id: user.id,
         tier: newTaskTier,
         title: newTaskTitle.trim(),
+        due_time: newTaskDueTime || null,
         is_completed: false,
       }])
       .select()
@@ -559,6 +649,7 @@ export default function App() {
     if (!error && data) {
       setTasks([...tasks, data]);
       setNewTaskTitle('');
+      setNewTaskDueTime('');
     }
   };
 
@@ -600,27 +691,42 @@ export default function App() {
     alert('Profile parameters updated!');
   };
 
-  // Custom Spotify Link Converter (Tracks, Playlists, Albums)
   const applyCustomSpotify = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customSpotifyUrl.trim()) return;
-    let rawUrl = customSpotifyUrl.trim();
+    let rawUrl = customSpotifyUrl.trim().split('?')[0];
 
-    // Strip URL parameters like ?si=...
-    const cleanUrl = rawUrl.split('?')[0];
-
-    if (cleanUrl.includes('open.spotify.com/') && !cleanUrl.includes('/embed/')) {
-      const embedUrl = cleanUrl.replace('open.spotify.com/', 'open.spotify.com/embed/');
+    if (rawUrl.includes('open.spotify.com/') && !rawUrl.includes('/embed/')) {
+      const embedUrl = rawUrl.replace('open.spotify.com/', 'open.spotify.com/embed/');
       setSpotifyEmbedUrl(embedUrl);
       setCustomSpotifyUrl('');
       confetti({ particleCount: 30, spread: 40, origin: { y: 0.7 } });
-    } else if (cleanUrl.includes('/embed/')) {
-      setSpotifyEmbedUrl(cleanUrl);
+    } else if (rawUrl.includes('/embed/')) {
+      setSpotifyEmbedUrl(rawUrl);
       setCustomSpotifyUrl('');
       confetti({ particleCount: 30, spread: 40, origin: { y: 0.7 } });
     } else {
-      alert('Please paste a valid Spotify track, album, or playlist URL.');
+      alert('Please paste a valid Spotify link.');
     }
+  };
+
+  // Calculate remaining time badge for tasks
+  const getDeadlineStatus = (dueTime?: string) => {
+    if (!dueTime) return null;
+    const [dueH, dueM] = dueTime.split(':').map(Number);
+    const now = new Date();
+    const target = new Date();
+    target.setHours(dueH, dueM, 0, 0);
+
+    const diffMinutes = Math.round((target.getTime() - now.getTime()) / (1000 * 60));
+
+    if (diffMinutes < 0) {
+      return { text: `Overdue (${dueTime})`, color: 'bg-red-500/20 text-red-400 border-red-500/30' };
+    }
+    if (diffMinutes <= 60) {
+      return { text: `⏳ ${diffMinutes}m left (${dueTime})`, color: 'bg-amber-500/20 text-amber-400 border-amber-500/40 animate-pulse' };
+    }
+    return { text: `Due ${dueTime}`, color: 'border-inherit opacity-75' };
   };
 
   // Group & Resource Vault Methods
@@ -892,7 +998,7 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Derived Tier & Gamification Analytics
+  // Derived Analytics
   const studentTotalHours = useMemo(() => {
     return myPastLogs.reduce((acc, curr) => acc + (curr.hours_studied || 0), 0);
   }, [myPastLogs]);
@@ -1041,6 +1147,16 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {!notificationsAllowed && (
+              <button
+                onClick={requestNotificationAccess}
+                className="text-xs px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1 hover:bg-amber-500/20 transition"
+                title="Enable 1-Hour Deadline Reminders"
+              >
+                <BellRing className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Alerts</span>
+              </button>
+            )}
+
             <span className="text-xs opacity-60 hidden md:inline-block font-mono">{displayNameDisplay}</span>
             <button 
               onClick={handleSignOut} 
@@ -1058,22 +1174,6 @@ export default function App() {
         <div className={`px-4 py-1.5 text-xs font-medium flex items-center justify-center gap-2 border-b ${isLight ? 'bg-blue-50 text-blue-800 border-blue-100' : 'bg-blue-950/50 text-blue-200 border-blue-900/50'}`}>
           <Megaphone className="w-3.5 h-3.5 shrink-0" />
           <span>{announcements[0].message}</span>
-        </div>
-      )}
-
-      {/* Birthday Notification Banner */}
-      {theme === 'birthday' && (
-        <div className="bg-pink-950/40 border-b border-pink-900/50 text-pink-200 px-4 py-1 text-xs font-medium text-center flex items-center justify-center gap-2">
-          <PartyPopper className="w-3.5 h-3.5 text-pink-400" />
-          Happy Birthday! Wishing you focus and success in your studies this year.
-        </div>
-      )}
-
-      {/* Blocked Account Banner */}
-      {profile?.is_blocked && (
-        <div className="bg-red-600 text-white px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2">
-          <Ban className="w-4 h-4 shrink-0" />
-          Account suspended. Task logs and community access are currently restricted.
         </div>
       )}
 
@@ -1171,7 +1271,7 @@ export default function App() {
               <button
                 onClick={() => setActiveToolDrawer(activeToolDrawer === 'spotify' ? 'none' : 'spotify')}
                 className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  activeToolDrawer === 'spotify' ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
+                  activeToolDrawer === 'spotify' ? 'bg-emerald-700 text-white border-emerald-600 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
                 }`}
               >
                 <Music className="w-3.5 h-3.5 text-emerald-400" />
@@ -1180,7 +1280,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Expandable Tool Drawer 1: AI Study Plan Generator */}
+            {/* Expandable Tool Drawers */}
             {activeToolDrawer === 'ai' && (
               <div className={`p-4 rounded-xl border border-purple-500/30 ${curTheme.card} space-y-2.5 animate-in fade-in`}>
                 <div className="flex items-center gap-2">
@@ -1192,7 +1292,7 @@ export default function App() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Topic (e.g. Convolutional Networks, DP)..."
+                    placeholder="Topic (e.g. Dynamic Programming, Transformers)..."
                     value={aiTopicInput}
                     onChange={(e) => setAiTopicInput(e.target.value)}
                     className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
@@ -1225,7 +1325,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Expandable Tool Drawer 2: Virtual Study Library */}
             {activeToolDrawer === 'library' && (
               <div className={`p-4 rounded-xl border ${curTheme.card} space-y-3 animate-in fade-in`}>
                 <div className="flex items-center justify-between">
@@ -1259,7 +1358,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Expandable Tool Drawer 3: Spotify Focus Lounge & Mini Player */}
             {activeToolDrawer === 'spotify' && (
               <div className={`p-4 rounded-xl border border-emerald-500/30 ${curTheme.card} space-y-3 animate-in fade-in`}>
                 <div className="flex items-center justify-between">
@@ -1276,7 +1374,6 @@ export default function App() {
                   </a>
                 </div>
 
-                {/* Quick Presets */}
                 <div className="flex flex-wrap gap-1.5">
                   {SPOTIFY_PRESETS.map((preset) => (
                     <button
@@ -1291,11 +1388,10 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Paste Any Custom Track/Playlist/Album Form */}
                 <form onSubmit={applyCustomSpotify} className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Paste any Spotify Song, Playlist, or Album link..."
+                    placeholder="Paste any Spotify song/playlist link..."
                     value={customSpotifyUrl}
                     onChange={(e) => setCustomSpotifyUrl(e.target.value)}
                     className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
@@ -1308,7 +1404,6 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* Spotify Mini Player Iframe */}
                 <div className="rounded-xl overflow-hidden border border-emerald-500/20 bg-black/40 shadow-inner">
                   <iframe
                     src={spotifyEmbedUrl}
@@ -1326,10 +1421,10 @@ export default function App() {
             {/* Main Laptop 2-Column Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               
-              {/* Left 2 Columns: Action Roadmap & Daily Reflection */}
+              {/* Left 2 Columns: Action Roadmap & Reflection */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 
-                {/* Task Add Form */}
+                {/* Task Add Form with Deadline Time Input */}
                 <form onSubmit={addTask} className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <div className="flex gap-2">
                     <input
@@ -1339,6 +1434,15 @@ export default function App() {
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                     />
+                    <div className="flex items-center gap-1 bg-inherit">
+                      <input
+                        type="time"
+                        title="Set Target Deadline Time"
+                        value={newTaskDueTime}
+                        onChange={(e) => setNewTaskDueTime(e.target.value)}
+                        className={`rounded-lg px-2 py-2 text-xs outline-none ${curTheme.input}`}
+                      />
+                    </div>
                     <button 
                       type="submit" 
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
@@ -1364,7 +1468,7 @@ export default function App() {
                   </div>
                 </form>
 
-                {/* Task List */}
+                {/* Task List with Deadline Reminders */}
                 <div className="space-y-2">
                   <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
                     Today's Roadmap ({tasks.length})
@@ -1374,33 +1478,42 @@ export default function App() {
                       No objectives configured for today. Add your target tasks above!
                     </div>
                   ) : (
-                    tasks.map((task) => (
-                      <div 
-                        key={task.id} 
-                        className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition ${
-                          task.is_completed ? 'opacity-40' : ''
-                        } ${curTheme.card}`}
-                      >
-                        <div onClick={() => toggleTask(task)} className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                          {task.is_completed ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                          ) : (
-                            <Circle className="w-4 h-4 opacity-40 hover:opacity-100 shrink-0" />
-                          )}
-                          <span className={`text-sm truncate font-medium ${task.is_completed ? 'line-through' : ''}`}>
-                            {task.title}
-                          </span>
+                    tasks.map((task) => {
+                      const deadline = getDeadlineStatus(task.due_time);
+                      return (
+                        <div 
+                          key={task.id} 
+                          className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition ${                             task.is_completed ? 'opacity-40' : ''                           } ${curTheme.card}`}
+                        >
+                          <div onClick={() => toggleTask(task)} className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                            {task.is_completed ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            ) : (
+                              <Circle className="w-4 h-4 opacity-40 hover:opacity-100 shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <span className={`text-sm block truncate font-medium ${task.is_completed ? 'line-through' : ''}`}>
+                                {task.title}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            {deadline && !task.is_completed && (
+                              <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${deadline.color}`}>
+                                {deadline.text}
+                              </span>
+                            )}
+                            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border border-inherit opacity-60">
+                              {task.tier}
+                            </span>
+                            <button onClick={() => deleteTask(task.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded border border-inherit opacity-60">
-                            {task.tier}
-                          </span>
-                          <button onClick={() => deleteTask(task.id)} className="opacity-40 hover:opacity-100 hover:text-red-500 p-1">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -1446,7 +1559,6 @@ export default function App() {
 
               {/* Right 1 Column: Tier Ratio Breakdown & Past Study Logs */}
               <div className="space-y-4">
-                {/* 3-Tier Distribution Breakdown */}
                 <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
                     <TrendingUp className="w-3.5 h-3.5" /> Study Ratio Distribution
@@ -1701,32 +1813,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {isGroupModerator && (
-                  <div className={`p-2.5 border-b border-inherit text-xs space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
-                    <span className="font-semibold text-xs opacity-75 block">Member Access & Requests:</span>
-                    <div className="flex gap-2 overflow-x-auto pb-0.5">
-                      {groupMembersList.map((m) => (
-                        <div key={m.id} className={`p-1.5 px-2 rounded-lg border border-inherit text-xs shrink-0 flex items-center gap-2 ${isLight ? 'bg-white' : 'bg-slate-950'}`}>
-                          <div>
-                            <span className="font-semibold">{m.profiles?.display_name || m.profiles?.email?.split('@')[0]}</span>
-                            <span className="opacity-50 text-[10px] ml-1">({m.status})</span>
-                          </div>
-                          {m.status === 'pending' && (
-                            <div className="flex gap-1">
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'approved')} className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded">
-                                <Check className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => updateGroupMemberStatus(m.id, 'rejected')} className="p-0.5 text-red-500 hover:bg-red-50 rounded">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* SubTab 1: Chat Stream */}
                 {groupActiveSubTab === 'chat' && (
                   <>
@@ -1792,43 +1878,6 @@ export default function App() {
                         ))
                       )}
                     </div>
-
-                    {isApprovedMember && (
-                      <form onSubmit={uploadGroupResource} className="p-2.5 border-t border-inherit space-y-2 mt-2">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Resource Title..."
-                            value={newResourceTitle}
-                            onChange={(e) => setNewResourceTitle(e.target.value)}
-                            className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
-                            required
-                          />
-                          <select
-                            value={newResourceCat}
-                            onChange={(e) => setNewResourceCat(e.target.value)}
-                            className={`rounded-lg px-2 py-1.5 text-xs outline-none ${curTheme.input}`}
-                          >
-                            <option>Notes</option>
-                            <option>Formula Sheet</option>
-                            <option>Solution</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <input
-                            type="url"
-                            placeholder="Resource URL (Drive/PDF)..."
-                            value={newResourceUrl}
-                            onChange={(e) => setNewResourceUrl(e.target.value)}
-                            className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
-                            required
-                          />
-                          <button type="submit" className={`px-3 py-1.5 rounded-lg text-xs font-bold ${curTheme.btnPrimary}`}>
-                            Upload
-                          </button>
-                        </div>
-                      </form>
-                    )}
                   </div>
                 )}
               </div>
@@ -1878,7 +1927,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PROFILE & PAST STUDY HISTORY */}
+        {/* TAB 5: PROFILE */}
         {activeTab === 'profile' && (
           <div className="max-w-4xl mx-auto space-y-5">
             <div className={`p-5 rounded-xl ${curTheme.card} flex flex-col sm:flex-row items-center justify-between gap-3`}>
@@ -1903,7 +1952,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Achievement Badges Vault */}
+            {/* Achievement Badges */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
                 <Medal className="w-3.5 h-3.5 text-amber-400" /> Milestone Badges
@@ -1936,7 +1985,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* GitHub-Style Consistency Heatmap */}
+            {/* GitHub Heatmap */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2`}>
               <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
                 <FlameKindling className="w-3.5 h-3.5 text-emerald-400" /> Activity Heatmap (Past 60 Days)
@@ -1953,7 +2002,7 @@ export default function App() {
                   return (
                     <div
                       key={idx}
-                      title={`${dateStr}: ${hrs} hrs studied`}
+                      title={`${dateStr}:${hrs} hrs studied`}
                       className={`w-3 h-3 rounded-xs transition-all hover:scale-125 cursor-pointer ${intensity}`}
                     />
                   );
@@ -1961,12 +2010,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2 Light + 2 Dark Theme Switcher */}
+            {/* Appearance Preferences */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5" /> Appearance Preferences
               </label>
-              
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
@@ -1979,7 +2027,6 @@ export default function App() {
                   </div>
                   <p className="text-[9px] opacity-50">Dark 1</p>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => changeTheme('obsidian')}
@@ -1991,7 +2038,6 @@ export default function App() {
                   </div>
                   <p className="text-[9px] opacity-50">Dark 2</p>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => changeTheme('porcelain')}
@@ -2003,7 +2049,6 @@ export default function App() {
                   </div>
                   <p className="text-[9px] opacity-50">Light 1</p>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => changeTheme('nordic')}
@@ -2018,7 +2063,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Profile Settings */}
+            {/* Target Goals & Contact */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
               <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Contact</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2049,7 +2094,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: ADMIN CONTROL & INSPECTOR */}
+        {/* TAB 6: ADMIN */}
         {activeTab === 'admin' && profile?.role === 'admin' && (
           <div className="max-w-5xl mx-auto space-y-5">
             <div className={`p-4 rounded-xl flex items-center justify-between border ${isLight ? 'bg-red-50 border-red-200 text-red-900' : 'bg-red-950/30 border-red-900/50 text-red-200'}`}>
@@ -2062,7 +2107,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Broadcast Form */}
             <form onSubmit={createBroadcastAnnouncement} className={`p-4 rounded-xl ${curTheme.card} space-y-2`}>
               <h4 className="text-xs font-mono uppercase font-semibold opacity-75 flex items-center gap-1">
                 <Megaphone className="w-3.5 h-3.5" /> Broadcast Announcement
@@ -2081,7 +2125,6 @@ export default function App() {
               </div>
             </form>
 
-            {/* Student Directory */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
                 Registered Students Directory ({allUsers.length})
@@ -2096,9 +2139,6 @@ export default function App() {
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded uppercase border border-inherit">
                           {student.role}
                         </span>
-                        {student.preferred_theme === 'birthday' && (
-                          <span className="text-[10px] text-pink-500 font-medium">🎂 Birthday</span>
-                        )}
                       </div>
                       <p className="text-xs opacity-60 font-mono">{student.email} • {student.points} XP</p>
                     </div>
@@ -2137,7 +2177,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* FULL STUDENT INSPECTOR MODAL */}
+            {/* Inspector Modal */}
             {viewingStudent && (
               <div className={`p-4 sm:p-5 rounded-xl space-y-3.5 border shadow-xl ${curTheme.card}`}>
                 <div className="flex justify-between items-center border-b border-inherit pb-2.5">
@@ -2150,32 +2190,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Remote Theme Override */}
-                <div className={`p-3 rounded-lg border border-inherit space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
-                  <label className="text-xs font-mono font-semibold opacity-75">Assign Student Theme (Remote Override)</label>
-                  <div className="flex gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'birthday')}
-                      className="px-2.5 py-1 rounded text-xs font-medium bg-pink-500/20 text-pink-500 border border-pink-500/30"
-                    >
-                      🎂 Birthday
-                    </button>
-                    <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'slate')}
-                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
-                    >
-                      Deep Slate
-                    </button>
-                    <button
-                      onClick={() => setStudentThemeSurprise(viewingStudent.id, 'porcelain')}
-                      className="px-2.5 py-1 rounded text-xs border border-inherit opacity-75"
-                    >
-                      Porcelain
-                    </button>
-                  </div>
-                </div>
-
-                {/* Role & XP Modification */}
                 <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-lg border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
                   <div>
                     <label className="text-xs font-semibold opacity-75 block mb-1">Role</label>
@@ -2216,7 +2230,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modern Fixed Bottom App Navigation */}
+      {/* Fixed Bottom Navigation */}
       <nav className={`fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${curTheme.nav}`}>
         <div className="max-w-lg mx-auto flex justify-around items-center">
           <button 
