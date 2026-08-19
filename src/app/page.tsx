@@ -11,7 +11,8 @@ import {
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
   TrendingUp, CheckSquare, Music, Play, Pause, RefreshCw, Volume2, Link as LinkIcon,
   Bot, FileText, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark,
-  ChevronDown, ChevronUp, Bell, BellRing, Hourglass, Layers
+  ChevronDown, ChevronUp, Bell, BellRing, Hourglass, Settings, Sliders,
+  BarChart3, CalendarRange, CheckCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -215,9 +216,16 @@ export default function App() {
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskTargetDate, setNewTaskTargetDate] = useState('');
 
-  // Notifications State
+  // Granular Notification Settings
   const [notificationsAllowed, setNotificationsAllowed] = useState(false);
+  const [notifMasterEnabled, setNotifMasterEnabled] = useState(true);
+  const [notifDeadlines, setNotifDeadlines] = useState(true);
+  const [notifDailyReminder, setNotifDailyReminder] = useState(true);
+  const [notifXpStreak, setNotifXpStreak] = useState(true);
   const [notifiedTaskIds, setNotifiedTaskIds] = useState<Set<string>>(new Set());
+
+  // Report Modal State
+  const [showFullReportModal, setShowFullReportModal] = useState(false);
 
   // Student Past Logs & Weekly Goal
   const [myPastLogs, setMyPastLogs] = useState<DailyLog[]>([]);
@@ -298,6 +306,8 @@ export default function App() {
       setNotificationsAllowed(Notification.permission === 'granted');
     }
 
+    if (!notifMasterEnabled || !notifDeadlines) return;
+
     const interval = setInterval(() => {
       const now = new Date();
       tasks.forEach((t) => {
@@ -322,7 +332,7 @@ export default function App() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [tasks, notifiedTaskIds]);
+  }, [tasks, notifiedTaskIds, notifMasterEnabled, notifDeadlines]);
 
   // Pomodoro Timer Engine
   useEffect(() => {
@@ -352,6 +362,15 @@ export default function App() {
     try {
       const savedTheme = localStorage.getItem('sq_theme');
       if (savedTheme) setTheme(normalizeTheme(savedTheme));
+
+      const savedNotifs = localStorage.getItem('sq_notifs_cfg');
+      if (savedNotifs) {
+        const parsed = JSON.parse(savedNotifs);
+        setNotifMasterEnabled(parsed.master ?? true);
+        setNotifDeadlines(parsed.deadlines ?? true);
+        setNotifDailyReminder(parsed.daily ?? true);
+        setNotifXpStreak(parsed.xp ?? true);
+      }
     } catch (_) {}
 
     if (typeof window !== 'undefined') {
@@ -403,6 +422,22 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const saveNotifConfig = (cfg: { master?: boolean; deadlines?: boolean; daily?: boolean; xp?: boolean }) => {
+    const updated = {
+      master: cfg.master ?? notifMasterEnabled,
+      deadlines: cfg.deadlines ?? notifDeadlines,
+      daily: cfg.daily ?? notifDailyReminder,
+      xp: cfg.xp ?? notifXpStreak,
+    };
+    setNotifMasterEnabled(updated.master);
+    setNotifDeadlines(updated.deadlines);
+    setNotifDailyReminder(updated.daily);
+    setNotifXpStreak(updated.xp);
+    try {
+      localStorage.setItem('sq_notifs_cfg', JSON.stringify(updated));
+    } catch (_) {}
+  };
 
   const fetchUserProfile = async (userId: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -505,7 +540,6 @@ export default function App() {
       setHours(dailyLog.hours_studied?.toString() || '0');
       setBlockers(dailyLog.blockers || '');
 
-      // Load all tasks for this user (both current daily log + multi-scope targets)
       const { data: taskData } = await supabase
         .from('tasks')
         .select('*')
@@ -1027,6 +1061,24 @@ export default function App() {
       .reduce((acc, curr) => acc + (curr.hours_studied || 0), 0);
   }, [myPastLogs]);
 
+  // Monthly Aggregates Breakdown
+  const monthlyAggregates = useMemo(() => {
+    const monthsMap: Record<string, { totalHours: number; daysCount: number; logs: DailyLog[] }> = {};
+    
+    myPastLogs.forEach((l) => {
+      if (!l.date) return;
+      const monthKey = l.date.substring(0, 7);
+      if (!monthsMap[monthKey]) {
+        monthsMap[monthKey] = { totalHours: 0, daysCount: 0, logs: [] };
+      }
+      monthsMap[monthKey].totalHours += (l.hours_studied || 0);
+      monthsMap[monthKey].daysCount += 1;
+      monthsMap[monthKey].logs.push(l);
+    });
+
+    return monthsMap;
+  }, [myPastLogs]);
+
   const tierRatio = useMemo(() => {
     let learn = 0, apply = 0, review = 0;
     myPastLogs.forEach(l => {
@@ -1458,7 +1510,7 @@ export default function App() {
               {/* Left 2 Columns: Action Roadmap & Reflection */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 
-                {/* Responsive Task Add Form with Mobile-Optimized Layout & Date Pickers */}
+                {/* Responsive Task Add Form */}
                 <form onSubmit={addTask} className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
@@ -1514,7 +1566,7 @@ export default function App() {
                   </div>
                 </form>
 
-                {/* Scoped Task List with Live Deadline Status */}
+                {/* Scoped Task List */}
                 <div className="space-y-2">
                   <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center justify-between">
                     <span>{selectedScope.toUpperCase()} ROADMAP ({filteredTasks.length})</span>
@@ -1606,7 +1658,7 @@ export default function App() {
                 </section>
               </div>
 
-              {/* Right 1 Column: Tier Ratio Breakdown & Past Study Logs */}
+              {/* Right 1 Column: Tier Ratio & History */}
               <div className="space-y-4">
                 <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
                   <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
@@ -1644,27 +1696,39 @@ export default function App() {
                 </div>
 
                 <div className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-3`}>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                    <History className="w-3.5 h-3.5" /> My Recent Study Logs
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
+                      <History className="w-3.5 h-3.5" /> Past 60-Day Logs
+                    </h3>
+                    <button
+                      onClick={() => setShowFullReportModal(true)}
+                      className="text-[11px] font-bold text-blue-400 hover:underline flex items-center gap-1"
+                    >
+                      Full Report <ExternalLink className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                   
                   {myPastLogs.length === 0 ? (
                     <p className="text-xs italic opacity-40 py-3 text-center">No previous logs recorded yet.</p>
                   ) : (
                     <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
-                      {myPastLogs.map((past, i) => (
-                        <div key={i} className={`p-2.5 rounded-lg border border-inherit text-xs space-y-1 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                      {myPastLogs.slice(0, 15).map((past, i) => (
+                        <div 
+                          key={i} 
+                          onClick={() => setShowFullReportModal(true)}
+                          className={`p-2.5 rounded-lg border border-inherit text-xs space-y-1 cursor-pointer hover:border-blue-500/50 transition ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}
+                        >
                           <div className="flex justify-between font-mono font-semibold">
                             <span>{past.date}</span>
                             <span className={curTheme.accent}>{past.hours_studied} hrs</span>
                           </div>
                           {past.blockers && (
-                            <p className="text-[11px] opacity-75 italic">Blocker: {past.blockers}</p>
+                            <p className="text-[11px] opacity-75 italic truncate">Blocker: {past.blockers}</p>
                           )}
                           <div className="space-y-0.5 pt-0.5">
                             {past.tasks && past.tasks.length > 0 ? (
-                              past.tasks.map((t) => (
-                                <div key={t.id} className="flex items-center gap-1 text-[11px] opacity-75">
+                              past.tasks.slice(0, 2).map((t) => (
+                                <div key={t.id} className="flex items-center gap-1 text-[11px] opacity-75 truncate">
                                   <span>{t.is_completed ? '✓' : '•'}</span>
                                   <span className={t.is_completed ? 'line-through opacity-60' : ''}>{t.title}</span>
                                 </div>
@@ -1976,9 +2040,10 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PROFILE */}
+        {/* TAB 5: PROFILE & ADVANCED CUSTOMIZATION SETTINGS */}
         {activeTab === 'profile' && (
           <div className="max-w-4xl mx-auto space-y-5">
+            {/* User Header */}
             <div className={`p-5 rounded-xl ${curTheme.card} flex flex-col sm:flex-row items-center justify-between gap-3`}>
               <div className="flex items-center gap-3.5">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold border ${isLight ? 'bg-slate-200 text-slate-800 border-slate-300' : 'bg-slate-800 text-slate-100 border-slate-700'}`}>
@@ -1998,6 +2063,13 @@ export default function App() {
                   <span className="text-[9px] font-mono opacity-60 block">FOCUS</span>
                   <span className="text-base font-bold">{studentTotalHours.toFixed(1)} hrs</span>
                 </div>
+                <button
+                  onClick={() => setShowFullReportModal(true)}
+                  className="px-3 py-1.5 rounded-lg border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold text-xs flex flex-col items-center justify-center transition"
+                >
+                  <BarChart3 className="w-4 h-4 mb-0.5" />
+                  <span>Reports</span>
+                </button>
               </div>
             </div>
 
@@ -2036,9 +2108,12 @@ export default function App() {
 
             {/* GitHub Heatmap */}
             <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2`}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
-                <FlameKindling className="w-3.5 h-3.5 text-emerald-400" /> Activity Heatmap (Past 60 Days)
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-75 flex items-center gap-1.5">
+                  <FlameKindling className="w-3.5 h-3.5 text-emerald-400" /> Activity Heatmap (Past 60 Days)
+                </h3>
+                <span className="text-[10px] opacity-60 font-mono">{myPastLogs.length} Days Recorded</span>
+              </div>
               <div className="flex flex-wrap gap-1 p-2 rounded-xl bg-black/20 border border-inherit">
                 {Array.from({ length: 60 }).map((_, idx) => {
                   const targetDate = new Date();
@@ -2051,7 +2126,8 @@ export default function App() {
                   return (
                     <div
                       key={idx}
-                      title={`${dateStr}:${hrs} hrs studied`}
+                      onClick={() => setShowFullReportModal(true)}
+                      title={`${dateStr}:${hrs} hrs studied (Click for full report)`}
                       className={`w-3 h-3 rounded-xs transition-all hover:scale-125 cursor-pointer ${intensity}`}
                     />
                   );
@@ -2059,86 +2135,172 @@ export default function App() {
               </div>
             </div>
 
-            {/* Appearance Preferences */}
-            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
-              <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
-                <Palette className="w-3.5 h-3.5" /> Appearance Preferences
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => changeTheme('slate')}
-                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'slate' ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-inherit opacity-70'}`}
-                >
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-600" />
-                    <span className="text-xs">Deep Slate</span>
-                  </div>
-                  <p className="text-[9px] opacity-50">Dark 1</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeTheme('obsidian')}
-                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'obsidian' ? 'border-emerald-500 bg-emerald-500/10 font-bold' : 'border-inherit opacity-70'}`}
-                >
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-neutral-950 border border-neutral-700" />
-                    <span className="text-xs">Obsidian</span>
-                  </div>
-                  <p className="text-[9px] opacity-50">Dark 2</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeTheme('porcelain')}
-                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'porcelain' ? 'border-blue-600 bg-blue-50 font-bold text-slate-900' : 'border-inherit opacity-70'}`}
-                >
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-100 border border-slate-300" />
-                    <span className="text-xs">Porcelain</span>
-                  </div>
-                  <p className="text-[9px] opacity-50">Light 1</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => changeTheme('nordic')}
-                  className={`p-2.5 rounded-lg border text-left transition ${theme === 'nordic' ? 'border-amber-700 bg-amber-50 font-bold text-stone-900' : 'border-inherit opacity-70'}`}
-                >
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#f4f0eb] border border-stone-300" />
-                    <span className="text-xs">Nordic Sand</span>
-                  </div>
-                  <p className="text-[9px] opacity-50">Light 2</p>
-                </button>
+            {/* SETTINGS & CUSTOMIZATION COLUMN */}
+            <div className={`p-5 rounded-xl border border-inherit ${curTheme.card} space-y-5`}>
+              <div className="flex items-center gap-2 border-b border-inherit pb-2.5">
+                <Settings className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold tracking-tight">Platform Settings & Customization</h3>
               </div>
-            </div>
 
-            {/* Target Goals & Contact */}
-            <div className={`p-4 rounded-xl border border-inherit ${curTheme.card} space-y-2.5`}>
-              <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Contact</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] opacity-75 block mb-0.5">Weekly Goal (Hours)</label>
-                  <input
-                    type="number"
-                    value={weeklyGoal}
-                    onChange={(e) => setWeeklyGoal(Number(e.target.value))}
-                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] opacity-75 block mb-0.5">WhatsApp (+91...)</label>
-                  <input
-                    type="text"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="+91..."
-                    className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
-                  />
+              {/* Appearance Themes */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5" /> Appearance Theme
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => changeTheme('slate')}
+                    className={`p-2.5 rounded-lg border text-left transition ${theme === 'slate' ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-inherit opacity-70'}`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-600" />
+                      <span className="text-xs">Deep Slate</span>
+                    </div>
+                    <p className="text-[9px] opacity-50">Dark 1</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => changeTheme('obsidian')}
+                    className={`p-2.5 rounded-lg border text-left transition ${theme === 'obsidian' ? 'border-emerald-500 bg-emerald-500/10 font-bold' : 'border-inherit opacity-70'}`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-neutral-950 border border-neutral-700" />
+                      <span className="text-xs">Obsidian</span>
+                    </div>
+                    <p className="text-[9px] opacity-50">Dark 2</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => changeTheme('porcelain')}
+                    className={`p-2.5 rounded-lg border text-left transition ${theme === 'porcelain' ? 'border-blue-600 bg-blue-50 font-bold text-slate-900' : 'border-inherit opacity-70'}`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-100 border border-slate-300" />
+                      <span className="text-xs">Porcelain</span>
+                    </div>
+                    <p className="text-[9px] opacity-50">Light 1</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => changeTheme('nordic')}
+                    className={`p-2.5 rounded-lg border text-left transition ${theme === 'nordic' ? 'border-amber-700 bg-amber-50 font-bold text-stone-900' : 'border-inherit opacity-70'}`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#f4f0eb] border border-stone-300" />
+                      <span className="text-xs">Nordic Sand</span>
+                    </div>
+                    <p className="text-[9px] opacity-50">Light 2</p>
+                  </button>
                 </div>
               </div>
-              <button onClick={savePhoneAndGoal} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
-                Save Profile Parameters
-              </button>
+
+              {/* Notification Center & Preferences */}
+              <div className="space-y-2.5 border-t border-inherit pt-3.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold font-mono uppercase opacity-75 flex items-center gap-1.5">
+                    <Bell className="w-3.5 h-3.5 text-amber-400" /> Notification Preferences
+                  </label>
+                  {!notificationsAllowed && (
+                    <button
+                      onClick={requestNotificationAccess}
+                      className="text-[10px] px-2 py-0.5 rounded bg-blue-600 text-white font-bold"
+                    >
+                      Enable Browser Alerts
+                    </button>
+                  )}
+                </div>
+
+                {/* Master Switch */}
+                <div className={`p-3 rounded-lg border border-inherit flex items-center justify-between ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <div>
+                    <p className="text-xs font-bold">Master Notifications</p>
+                    <p className="text-[10px] opacity-60">Turn all system push notifications on or off</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifMasterEnabled}
+                    onChange={(e) => saveNotifConfig({ master: e.target.checked })}
+                    className="w-4 h-4 cursor-pointer accent-blue-600"
+                  />
+                </div>
+
+                {/* Granular Alerts Checklist */}
+                {notifMasterEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <label className={`p-2.5 rounded-lg border border-inherit flex items-center gap-2 cursor-pointer ${isLight ? 'bg-slate-50' : 'bg-slate-950/20'}`}>
+                      <input
+                        type="checkbox"
+                        checked={notifDeadlines}
+                        onChange={(e) => saveNotifConfig({ deadlines: e.target.checked })}
+                        className="accent-blue-600"
+                      />
+                      <div>
+                        <p className="font-semibold text-[11px]">1h Deadline Alerts</p>
+                        <p className="text-[9px] opacity-50">60 mins before due time</p>
+                      </div>
+                    </label>
+
+                    <label className={`p-2.5 rounded-lg border border-inherit flex items-center gap-2 cursor-pointer ${isLight ? 'bg-slate-50' : 'bg-slate-950/20'}`}>
+                      <input
+                        type="checkbox"
+                        checked={notifDailyReminder}
+                        onChange={(e) => saveNotifConfig({ daily: e.target.checked })}
+                        className="accent-blue-600"
+                      />
+                      <div>
+                        <p className="font-semibold text-[11px]">Evening Log Alert</p>
+                        <p className="text-[9px] opacity-50">Protect daily streak at 9 PM</p>
+                      </div>
+                    </label>
+
+                    <label className={`p-2.5 rounded-lg border border-inherit flex items-center gap-2 cursor-pointer ${isLight ? 'bg-slate-50' : 'bg-slate-950/20'}`}>
+                      <input
+                        type="checkbox"
+                        checked={notifXpStreak}
+                        onChange={(e) => saveNotifConfig({ xp: e.target.checked })}
+                        className="accent-blue-600"
+                      />
+                      <div>
+                        <p className="font-semibold text-[11px]">XP Milestone Alerts</p>
+                        <p className="text-[9px] opacity-50">Badge awards & league rank</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Goal & Contact Parameters */}
+              <div className="space-y-2 border-t border-inherit pt-3.5">
+                <h3 className="text-xs font-semibold font-mono opacity-75 uppercase">Target Goals & WhatsApp Contact</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] opacity-75 block mb-0.5">Weekly Goal (Hours)</label>
+                    <input
+                      type="number"
+                      value={weeklyGoal}
+                      onChange={(e) => setWeeklyGoal(Number(e.target.value))}
+                      className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] opacity-75 block mb-0.5">WhatsApp (+91...)</label>
+                    <input
+                      type="text"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="+91..."
+                      className={`w-full rounded-lg px-3 py-1.5 text-sm outline-none ${curTheme.input}`}
+                    />
+                  </div>
+                </div>
+                <button onClick={savePhoneAndGoal} className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">
+                  Save Settings & Profile Parameters
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2278,6 +2440,119 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* FULL ACADEMIC HISTORY & MONTHLY/WEEKLY REPORT MODAL */}
+      {showFullReportModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
+          <div className={`w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col border shadow-2xl overflow-hidden ${curTheme.card}`}>
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-inherit flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="text-base font-bold">Academic Performance & Historical Reports</h3>
+                  <p className="text-xs opacity-60">Full 60-day searchable log ledger and aggregated study cycles.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFullReportModal(false)}
+                className="p-1.5 rounded-lg border border-inherit opacity-60 hover:opacity-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+              
+              {/* Summary Metric Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className={`p-3.5 rounded-xl border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <span className="text-[10px] font-mono uppercase opacity-60">All-Time Focus</span>
+                  <p className="text-xl font-black mt-0.5">{studentTotalHours.toFixed(1)} <span className="text-xs font-normal opacity-60">hrs</span></p>
+                </div>
+                <div className={`p-3.5 rounded-xl border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <span className="text-[10px] font-mono uppercase opacity-60">Active Study Days</span>
+                  <p className="text-xl font-black mt-0.5">{myPastLogs.length} <span className="text-xs font-normal opacity-60">days</span></p>
+                </div>
+                <div className={`p-3.5 rounded-xl border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <span className="text-[10px] font-mono uppercase opacity-60">Avg Hours / Day</span>
+                  <p className="text-xl font-black mt-0.5">
+                    {myPastLogs.length > 0 ? (studentTotalHours / myPastLogs.length).toFixed(1) : 0} <span className="text-xs font-normal opacity-60">hrs</span>
+                  </p>
+                </div>
+                <div className={`p-3.5 rounded-xl border border-inherit ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                  <span className="text-[10px] font-mono uppercase opacity-60">Weekly Goal Run</span>
+                  <p className="text-xl font-black mt-0.5">{weeklyPercent}%</p>
+                </div>
+              </div>
+
+              {/* Monthly Aggregates Breakdown */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider opacity-75 flex items-center gap-1.5">
+                  <CalendarRange className="w-3.5 h-3.5 text-blue-400" /> Monthly Study Aggregates
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {Object.entries(monthlyAggregates).map(([month, data]) => (
+                    <div key={month} className={`p-3.5 rounded-xl border border-inherit space-y-1.5 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-xs font-mono">{month}</span>
+                        <span className="text-xs font-bold text-blue-400">{data.totalHours.toFixed(1)} hrs</span>
+                      </div>
+                      <p className="text-[10px] opacity-60">{data.daysCount} active study sessions recorded</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Complete 60-Day Searchable Log Ledger */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-mono font-bold uppercase tracking-wider opacity-75 flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-emerald-400" /> Complete Daily Logs Archive ({myPastLogs.length})
+                  </h4>
+                </div>
+
+                <div className="space-y-2">
+                  {myPastLogs.map((past, i) => (
+                    <div key={i} className={`p-3.5 rounded-xl border border-inherit text-xs space-y-2 ${isLight ? 'bg-slate-50' : 'bg-slate-950/40'}`}>
+                      <div className="flex justify-between items-center font-mono font-bold">
+                        <span className="text-sm">{past.date}</span>
+                        <span className="text-sm text-emerald-400">{past.hours_studied} Hours Logged</span>
+                      </div>
+
+                      {past.blockers && (
+                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+                          <strong>Doubt / Blocker:</strong> {past.blockers}
+                        </div>
+                      )}
+
+                      <div className="space-y-1 pt-1">
+                        <span className="text-[10px] font-mono uppercase opacity-50 block">Tasks Completed:</span>
+                        {past.tasks && past.tasks.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                            {past.tasks.map((t) => (
+                              <div key={t.id} className="flex items-center gap-1.5 text-[11px] opacity-80">
+                                <span className={t.is_completed ? 'text-emerald-500 font-bold' : 'opacity-40'}>
+                                  {t.is_completed ? '✓' : '•'}
+                                </span>
+                                <span className={t.is_completed ? 'line-through opacity-60' : ''}>{t.title}</span>
+                                <span className="text-[8px] font-mono px-1 rounded border border-inherit opacity-40 ml-auto">{t.tier}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] opacity-40 italic">No specific task checklist recorded</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fixed Bottom Navigation */}
       <nav className={`fixed bottom-0 left-0 right-0 z-50 backdrop-blur-md border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-colors duration-200 ${curTheme.nav}`}>
