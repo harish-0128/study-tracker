@@ -11,7 +11,7 @@ import {
   Megaphone, UserMinus, Shield, Cake, PartyPopper, History,
   TrendingUp, CheckSquare, Music, Play, Pause, RefreshCw, Volume2, Link as LinkIcon,
   Bot, FileText, Users, FlameKindling, Zap, Medal, ExternalLink, Bookmark,
-  ChevronDown, ChevronUp, Bell, BellRing, Hourglass
+  ChevronDown, ChevronUp, Bell, BellRing, Hourglass, Layers
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -19,13 +19,16 @@ const APP_NAME = "SYNAPSE";
 
 type TabType = 'dashboard' | 'calendar' | 'leaderboard' | 'discussions' | 'profile' | 'admin';
 type ThemeType = 'slate' | 'obsidian' | 'porcelain' | 'nordic' | 'birthday';
+type TaskScopeType = 'daily' | 'weekly' | 'monthly';
 
 interface Task {
   id: string;
   tier: 'LEARN' | 'APPLY' | 'REVIEW';
   title: string;
   is_completed: boolean;
-  due_time?: string; // e.g. "17:30"
+  due_time?: string;
+  scope?: TaskScopeType;
+  target_date?: string;
 }
 
 interface DailyLog {
@@ -194,6 +197,9 @@ export default function App() {
   // Mobile expandable tool panels
   const [activeToolDrawer, setActiveToolDrawer] = useState<'none' | 'ai' | 'library' | 'spotify'>('none');
 
+  // Scope Tab: Daily, Weekly, Monthly
+  const [selectedScope, setSelectedScope] = useState<TaskScopeType>('daily');
+
   // Auth State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -207,6 +213,7 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskTier, setNewTaskTier] = useState<'LEARN' | 'APPLY' | 'REVIEW'>('LEARN');
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
+  const [newTaskTargetDate, setNewTaskTargetDate] = useState('');
 
   // Notifications State
   const [notificationsAllowed, setNotificationsAllowed] = useState(false);
@@ -230,7 +237,7 @@ export default function App() {
   const [isStudyingLive, setIsStudyingLive] = useState(false);
   const [studySubjectInput, setStudySubjectInput] = useState('Deep Work');
 
-  // AI Mentor & Generator State
+  // AI Mentor State
   const [aiTopicInput, setAiTopicInput] = useState('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<{ learn: string[]; apply: string[]; review: string[] } | null>(null);
@@ -253,7 +260,7 @@ export default function App() {
   const [studentEvents, setStudentEvents] = useState<StudyEvent[]>([]);
   const [editPointsValue, setEditPointsValue] = useState<string>('');
 
-  // Discussion Groups & Vault State
+  // Discussion Groups State
   const [groups, setGroups] = useState<DiscussionGroup[]>([]);
   const [activeGroup, setActiveGroup] = useState<DiscussionGroup | null>(null);
   const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
@@ -268,9 +275,7 @@ export default function App() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
 
-  // Profile contact
   const [phoneNumber, setPhoneNumber] = useState('');
-
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Request Notification Permissions
@@ -304,7 +309,6 @@ export default function App() {
 
         const diffMinutes = Math.round((targetTime.getTime() - now.getTime()) / (1000 * 60));
 
-        // Alert if within 60 minutes
         if (diffMinutes <= 60 && diffMinutes > 0) {
           if (Notification.permission === 'granted') {
             new Notification(`⚠️ 1 Hour Left: ${t.title}`, {
@@ -315,7 +319,7 @@ export default function App() {
           setNotifiedTaskIds((prev) => new Set(prev).add(t.id));
         }
       });
-    }, 30000); // Checks every 30s
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [tasks, notifiedTaskIds]);
@@ -343,7 +347,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isPomoRunning, pomoSeconds, pomoMode]);
 
-  // Initial Load & Widget Shortcut Listener
+  // Initial Load & Widget URL Listeners
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem('sq_theme');
@@ -452,7 +456,6 @@ export default function App() {
       .eq('date', todayStr)
       .maybeSingle();
 
-    // If new day, create log & migrate unfinished tasks automatically
     if (!dailyLog) {
       const { data: newLog } = await supabase
         .from('daily_logs')
@@ -463,7 +466,6 @@ export default function App() {
       dailyLog = newLog;
 
       if (dailyLog) {
-        // Query the most recent previous day
         const { data: previousLog } = await supabase
           .from('daily_logs')
           .select('id')
@@ -476,7 +478,7 @@ export default function App() {
         if (previousLog) {
           const { data: uncompletedPrevious } = await supabase
             .from('tasks')
-            .select('title, tier, due_time')
+            .select('title, tier, due_time, scope, target_date')
             .eq('daily_log_id', previousLog.id)
             .eq('is_completed', false);
 
@@ -487,6 +489,8 @@ export default function App() {
               tier: t.tier,
               title: `${t.title} ↩`,
               due_time: t.due_time,
+              scope: t.scope || 'daily',
+              target_date: t.target_date,
               is_completed: false
             }));
 
@@ -501,10 +505,11 @@ export default function App() {
       setHours(dailyLog.hours_studied?.toString() || '0');
       setBlockers(dailyLog.blockers || '');
 
+      // Load all tasks for this user (both current daily log + multi-scope targets)
       const { data: taskData } = await supabase
         .from('tasks')
         .select('*')
-        .eq('daily_log_id', dailyLog.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true });
 
       setTasks(taskData || []);
@@ -550,7 +555,7 @@ export default function App() {
     }
   };
 
-  // AI Study Mentor Generation Engine
+  // AI Study Mentor Engine
   const generateAiStudyRoadmap = () => {
     if (!aiTopicInput.trim()) return;
     setIsGeneratingAi(true);
@@ -578,13 +583,13 @@ export default function App() {
     if (!generatedPlan || !log || !user) return;
     const newTasks: any[] = [];
     for (const title of generatedPlan.learn) {
-      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'LEARN', title, is_completed: false });
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'LEARN', scope: selectedScope, title, is_completed: false });
     }
     for (const title of generatedPlan.apply) {
-      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'APPLY', title, is_completed: false });
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'APPLY', scope: selectedScope, title, is_completed: false });
     }
     for (const title of generatedPlan.review) {
-      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'REVIEW', title, is_completed: false });
+      newTasks.push({ daily_log_id: log.id, user_id: user.id, tier: 'REVIEW', scope: selectedScope, title, is_completed: false });
     }
     const { data } = await supabase.from('tasks').insert(newTasks).select();
     if (data) {
@@ -593,7 +598,7 @@ export default function App() {
       setAiTopicInput('');
       setActiveToolDrawer('none');
       confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
-      alert('AI study modules adopted into today\'s roadmap!');
+      alert(`AI study targets adopted into ${selectedScope} roadmap!`);
     }
   };
 
@@ -624,7 +629,7 @@ export default function App() {
     await supabase.from('profiles').update({ points: newPoints }).eq('id', profile.id);
   };
 
-  // Add Task with Due Time / Deadline
+  // Add Task with Scope, Due Time, and Target Date
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (profile?.is_blocked) {
@@ -639,8 +644,10 @@ export default function App() {
         daily_log_id: log.id,
         user_id: user.id,
         tier: newTaskTier,
+        scope: selectedScope,
         title: newTaskTitle.trim(),
-        due_time: newTaskDueTime || null,
+        due_time: selectedScope === 'daily' ? (newTaskDueTime || null) : null,
+        target_date: selectedScope !== 'daily' ? (newTaskTargetDate || null) : todayStr,
         is_completed: false,
       }])
       .select()
@@ -650,6 +657,7 @@ export default function App() {
       setTasks([...tasks, data]);
       setNewTaskTitle('');
       setNewTaskDueTime('');
+      setNewTaskTargetDate('');
     }
   };
 
@@ -710,8 +718,12 @@ export default function App() {
     }
   };
 
-  // Calculate remaining time badge for tasks
-  const getDeadlineStatus = (dueTime?: string) => {
+  const getDeadlineStatus = (dueTime?: string, targetDate?: string, scope?: string) => {
+    if (scope === 'weekly' || scope === 'monthly') {
+      if (!targetDate) return null;
+      return { text: `Target: ${targetDate}`, color: 'border-inherit opacity-75' };
+    }
+
     if (!dueTime) return null;
     const [dueH, dueM] = dueTime.split(':').map(Number);
     const now = new Date();
@@ -998,7 +1010,11 @@ export default function App() {
     }
   }, [activeTab]);
 
-  // Derived Analytics
+  // Scoped Tasks Filter
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => (t.scope || 'daily') === selectedScope);
+  }, [tasks, selectedScope]);
+
   const studentTotalHours = useMemo(() => {
     return myPastLogs.reduce((acc, curr) => acc + (curr.hours_studied || 0), 0);
   }, [myPastLogs]);
@@ -1117,8 +1133,7 @@ export default function App() {
     );
   }
 
-  const completedCount = tasks.filter(t => t.is_completed).length;
-  const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+  const completedCount = filteredTasks.filter(t => t.is_completed).length;
   const weeklyPercent = Math.min(Math.round((weeklyLoggedHours / (weeklyGoal || 20)) * 100), 100);
 
   return (
@@ -1180,7 +1195,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="max-w-6xl w-full mx-auto p-3.5 sm:p-8 pb-48 sm:pb-52 flex-1">
         
-        {/* TAB 1: TODAY'S FOCUS */}
+        {/* TAB 1: ROADMAP & FOCUS */}
         {activeTab === 'dashboard' && (
           <div className="space-y-4 sm:space-y-6">
             
@@ -1197,7 +1212,7 @@ export default function App() {
                 <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center gap-1">
                   <CheckSquare className="w-3 h-3" /> Done
                 </span>
-                <p className="text-xl sm:text-3xl font-bold mt-0.5">{completedCount} <span className="text-xs font-normal opacity-60">/ {tasks.length}</span></p>
+                <p className="text-xl sm:text-3xl font-bold mt-0.5">{completedCount} <span className="text-xs font-normal opacity-60">/ {filteredTasks.length}</span></p>
               </div>
 
               <div className={`p-3.5 sm:p-5 rounded-xl ${curTheme.card}`}>
@@ -1280,7 +1295,7 @@ export default function App() {
               </button>
             </div>
 
-            {/* Expandable Tool Drawers */}
+            {/* Expandable AI Mentor Drawer */}
             {activeToolDrawer === 'ai' && (
               <div className={`p-4 rounded-xl border border-purple-500/30 ${curTheme.card} space-y-2.5 animate-in fade-in`}>
                 <div className="flex items-center gap-2">
@@ -1325,6 +1340,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Expandable Virtual Library Drawer */}
             {activeToolDrawer === 'library' && (
               <div className={`p-4 rounded-xl border ${curTheme.card} space-y-3 animate-in fade-in`}>
                 <div className="flex items-center justify-between">
@@ -1358,6 +1374,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Expandable Spotify Focus Lounge */}
             {activeToolDrawer === 'spotify' && (
               <div className={`p-4 rounded-xl border border-emerald-500/30 ${curTheme.card} space-y-3 animate-in fade-in`}>
                 <div className="flex items-center justify-between">
@@ -1418,38 +1435,67 @@ export default function App() {
               </div>
             )}
 
+            {/* Scope Navigation Switcher (Daily / Weekly / Monthly) */}
+            <div className="flex border-b border-inherit gap-2 pb-1 text-xs font-semibold">
+              {(['daily', 'weekly', 'monthly'] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedScope(s)}
+                  className={`px-3 py-1.5 rounded-lg uppercase font-mono tracking-wider transition ${
+                    selectedScope === s 
+                      ? `${curTheme.btnPrimary} font-bold shadow-sm` 
+                      : 'opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  {s === 'daily' ? "Today's Targets" : s === 'weekly' ? 'Weekly Goals' : 'Monthly Milestones'}
+                </button>
+              ))}
+            </div>
+
             {/* Main Laptop 2-Column Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               
               {/* Left 2 Columns: Action Roadmap & Reflection */}
               <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                 
-                {/* Task Add Form with Deadline Time Input */}
+                {/* Responsive Task Add Form with Mobile-Optimized Layout & Date Pickers */}
                 <form onSubmit={addTask} className={`p-4 sm:p-5 rounded-xl ${curTheme.card} space-y-2.5`}>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
-                      placeholder="Add target study task..."
+                      placeholder={`Add ${selectedScope} target task...`}
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
-                      className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
+                      className={`w-full flex-1 rounded-lg px-3 py-2 text-sm outline-none transition ${curTheme.input}`}
                     />
-                    <div className="flex items-center gap-1 bg-inherit">
-                      <input
-                        type="time"
-                        title="Set Target Deadline Time"
-                        value={newTaskDueTime}
-                        onChange={(e) => setNewTaskDueTime(e.target.value)}
-                        className={`rounded-lg px-2 py-2 text-xs outline-none ${curTheme.input}`}
-                      />
+                    
+                    <div className="flex items-center gap-2 shrink-0">
+                      {selectedScope === 'daily' ? (
+                        <input
+                          type="time"
+                          title="Target Due Time"
+                          value={newTaskDueTime}
+                          onChange={(e) => setNewTaskDueTime(e.target.value)}
+                          className={`flex-1 sm:flex-none rounded-lg px-2.5 py-2 text-xs outline-none ${curTheme.input}`}
+                        />
+                      ) : (
+                        <input
+                          type="date"
+                          title="Target Deadline Date"
+                          value={newTaskTargetDate}
+                          onChange={(e) => setNewTaskTargetDate(e.target.value)}
+                          className={`flex-1 sm:flex-none rounded-lg px-2.5 py-2 text-xs outline-none ${curTheme.input}`}
+                        />
+                      )}
+                      <button 
+                        type="submit" 
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
+                      >
+                        <Plus className="w-4 h-4" /> Add
+                      </button>
                     </div>
-                    <button 
-                      type="submit" 
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1 shrink-0 ${curTheme.btnPrimary}`}
-                    >
-                      <Plus className="w-4 h-4" /> Add
-                    </button>
                   </div>
+
                   <div className="flex gap-2">
                     {(['LEARN', 'APPLY', 'REVIEW'] as const).map((tier) => (
                       <button
@@ -1468,18 +1514,21 @@ export default function App() {
                   </div>
                 </form>
 
-                {/* Task List with Deadline Reminders */}
+                {/* Scoped Task List with Live Deadline Status */}
                 <div className="space-y-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60">
-                    Today's Roadmap ({tasks.length})
+                  <h2 className="text-xs font-semibold uppercase tracking-wider font-mono opacity-60 flex items-center justify-between">
+                    <span>{selectedScope.toUpperCase()} ROADMAP ({filteredTasks.length})</span>
+                    <span className="text-[10px] opacity-75 font-normal">
+                      {selectedScope === 'daily' ? todayStr : `${selectedScope.toUpperCase()} PLAN`}
+                    </span>
                   </h2>
-                  {tasks.length === 0 ? (
+                  {filteredTasks.length === 0 ? (
                     <div className={`text-xs italic p-5 rounded-xl text-center opacity-60 ${curTheme.card}`}>
-                      No objectives configured for today. Add your target tasks above!
+                      No {selectedScope} objectives configured. Add your target tasks above!
                     </div>
                   ) : (
-                    tasks.map((task) => {
-                      const deadline = getDeadlineStatus(task.due_time);
+                    filteredTasks.map((task) => {
+                      const deadline = getDeadlineStatus(task.due_time, task.target_date, task.scope);
                       return (
                         <div 
                           key={task.id} 
