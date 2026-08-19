@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   CheckCircle2, Circle, Plus, Trash2, BookOpen, Code2, RotateCcw, 
@@ -189,7 +189,7 @@ const SPOTIFY_PRESETS = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTabState] = useState<TabType>('dashboard');
   const [theme, setTheme] = useState<ThemeType>('slate');
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -286,6 +286,39 @@ export default function App() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Hardware Back Button / History API Handler
+  const setActiveTab = useCallback((nextTab: TabType, pushToHistory = true) => {
+    setActiveTabState(nextTab);
+    if (typeof window !== 'undefined' && pushToHistory) {
+      window.history.pushState({ tab: nextTab }, '', `/?tab=${nextTab}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Set initial history state
+    if (!window.history.state?.tab) {
+      window.history.replaceState({ tab: 'dashboard' }, '', '/?tab=dashboard');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (showFullReportModal) {
+        setShowFullReportModal(false);
+        return;
+      }
+      if (activeGroup) {
+        setActiveGroup(null);
+        return;
+      }
+      const previousTab = event.state?.tab || 'dashboard';
+      setActiveTabState(previousTab);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showFullReportModal, activeGroup]);
+
   // Request Notification Permissions
   const requestNotificationAccess = async () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -376,14 +409,17 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const action = urlParams.get('action');
+      const tabParam = urlParams.get('tab') as TabType;
 
       if (action === 'sprint') {
-        setActiveTab('dashboard');
+        setActiveTab('dashboard', false);
         setIsPomoRunning(true);
       } else if (action === 'log') {
-        setActiveTab('dashboard');
+        setActiveTab('dashboard', false);
       } else if (action === 'hub') {
-        setActiveTab('discussions');
+        setActiveTab('discussions', false);
+      } else if (tabParam) {
+        setActiveTab(tabParam, false);
       }
     }
 
@@ -421,7 +457,7 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [setActiveTab]);
 
   const saveNotifConfig = (cfg: { master?: boolean; deadlines?: boolean; daily?: boolean; xp?: boolean }) => {
     const updated = {
@@ -648,7 +684,11 @@ export default function App() {
     }
   };
 
+  // Sign Out with Confirmation
   const handleSignOut = async () => {
+    const confirmLogout = window.confirm("Are you sure you want to sign out of SYNAPSE?");
+    if (!confirmLogout) return;
+
     if (user) await supabase.from('live_study_presence').delete().eq('user_id', user.id);
     await supabase.auth.signOut();
     setUser(null);
