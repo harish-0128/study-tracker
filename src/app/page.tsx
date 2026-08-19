@@ -600,15 +600,27 @@ export default function App() {
     alert('Profile parameters updated!');
   };
 
+  // Custom Spotify Link Converter (Tracks, Playlists, Albums)
   const applyCustomSpotify = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customSpotifyUrl.trim()) return;
-    let url = customSpotifyUrl.trim();
-    if (url.includes('open.spotify.com/')) {
-      url = url.replace('open.spotify.com/', 'open.spotify.com/embed/');
+    let rawUrl = customSpotifyUrl.trim();
+
+    // Strip URL parameters like ?si=...
+    const cleanUrl = rawUrl.split('?')[0];
+
+    if (cleanUrl.includes('open.spotify.com/') && !cleanUrl.includes('/embed/')) {
+      const embedUrl = cleanUrl.replace('open.spotify.com/', 'open.spotify.com/embed/');
+      setSpotifyEmbedUrl(embedUrl);
+      setCustomSpotifyUrl('');
+      confetti({ particleCount: 30, spread: 40, origin: { y: 0.7 } });
+    } else if (cleanUrl.includes('/embed/')) {
+      setSpotifyEmbedUrl(cleanUrl);
+      setCustomSpotifyUrl('');
+      confetti({ particleCount: 30, spread: 40, origin: { y: 0.7 } });
+    } else {
+      alert('Please paste a valid Spotify track, album, or playlist URL.');
     }
-    setSpotifyEmbedUrl(url);
-    setCustomSpotifyUrl('');
   };
 
   // Group & Resource Vault Methods
@@ -1049,7 +1061,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Subtle Birthday Notification Banner */}
+      {/* Birthday Notification Banner */}
       {theme === 'birthday' && (
         <div className="bg-pink-950/40 border-b border-pink-900/50 text-pink-200 px-4 py-1 text-xs font-medium text-center flex items-center justify-center gap-2">
           <PartyPopper className="w-3.5 h-3.5 text-pink-400" />
@@ -1115,7 +1127,7 @@ export default function App() {
                       onClick={() => setIsPomoRunning(!isPomoRunning)}
                       className={`p-1.5 rounded-lg text-white font-bold transition shadow-sm ${isPomoRunning ? 'bg-amber-600' : 'bg-blue-600 hover:bg-blue-500'}`}
                     >
-                      {isPomoRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                      {isPomoRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                     </button>
                     <button
                       onClick={() => {
@@ -1125,7 +1137,7 @@ export default function App() {
                       }}
                       className="p-1.5 rounded-lg border border-inherit opacity-60 hover:opacity-100"
                     >
-                      <RefreshCw className="w-3 h-3" />
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -1159,16 +1171,16 @@ export default function App() {
               <button
                 onClick={() => setActiveToolDrawer(activeToolDrawer === 'spotify' ? 'none' : 'spotify')}
                 className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  activeToolDrawer === 'spotify' ? 'bg-emerald-700 text-white border-emerald-600 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
+                  activeToolDrawer === 'spotify' ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' : `${curTheme.card} opacity-80 hover:opacity-100`
                 }`}
               >
                 <Music className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="truncate">Audio</span>
+                <span className="truncate">Spotify</span>
                 {activeToolDrawer === 'spotify' ? <ChevronUp className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
               </button>
             </div>
 
-            {/* Expandable Tool Drawers */}
+            {/* Expandable Tool Drawer 1: AI Study Plan Generator */}
             {activeToolDrawer === 'ai' && (
               <div className={`p-4 rounded-xl border border-purple-500/30 ${curTheme.card} space-y-2.5 animate-in fade-in`}>
                 <div className="flex items-center gap-2">
@@ -1213,6 +1225,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Expandable Tool Drawer 2: Virtual Study Library */}
             {activeToolDrawer === 'library' && (
               <div className={`p-4 rounded-xl border ${curTheme.card} space-y-3 animate-in fade-in`}>
                 <div className="flex items-center justify-between">
@@ -1246,26 +1259,61 @@ export default function App() {
               </div>
             )}
 
+            {/* Expandable Tool Drawer 3: Spotify Focus Lounge & Mini Player */}
             {activeToolDrawer === 'spotify' && (
-              <div className={`p-4 rounded-xl border ${curTheme.card} space-y-2.5 animate-in fade-in`}>
+              <div className={`p-4 rounded-xl border border-emerald-500/30 ${curTheme.card} space-y-3 animate-in fade-in`}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-1.5 text-emerald-400">
+                    <Music className="w-3.5 h-3.5" /> Spotify Focus Lounge
+                  </h3>
+                  <a 
+                    href="https://open.spotify.com" 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="text-[10px] opacity-60 hover:opacity-100 flex items-center gap-1"
+                  >
+                    Open Web Player <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+
+                {/* Quick Presets */}
                 <div className="flex flex-wrap gap-1.5">
                   {SPOTIFY_PRESETS.map((preset) => (
                     <button
                       key={preset.name}
                       onClick={() => setSpotifyEmbedUrl(preset.embedUrl)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
-                        spotifyEmbedUrl === preset.embedUrl ? 'bg-emerald-600 text-white border-emerald-500' : 'border-inherit opacity-75'
+                        spotifyEmbedUrl === preset.embedUrl ? 'bg-emerald-600 text-white border-emerald-500 font-bold' : 'border-inherit opacity-75 hover:opacity-100'
                       }`}
                     >
                       {preset.name}
                     </button>
                   ))}
                 </div>
-                <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40">
+
+                {/* Paste Any Custom Track/Playlist/Album Form */}
+                <form onSubmit={applyCustomSpotify} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Paste any Spotify Song, Playlist, or Album link..."
+                    value={customSpotifyUrl}
+                    onChange={(e) => setCustomSpotifyUrl(e.target.value)}
+                    className={`flex-1 rounded-lg px-3 py-1.5 text-xs outline-none ${curTheme.input}`}
+                  />
+                  <button 
+                    type="submit" 
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shrink-0"
+                  >
+                    Load Song
+                  </button>
+                </form>
+
+                {/* Spotify Mini Player Iframe */}
+                <div className="rounded-xl overflow-hidden border border-emerald-500/20 bg-black/40 shadow-inner">
                   <iframe
                     src={spotifyEmbedUrl}
                     width="100%"
-                    height="80"
+                    height="152"
                     frameBorder="0"
                     allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                     loading="lazy"
